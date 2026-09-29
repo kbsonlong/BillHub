@@ -1,0 +1,19 @@
+[package]
+name = "billhub-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "billhub"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+billhub-core.workspace = true
+chrono.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
