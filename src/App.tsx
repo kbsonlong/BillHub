@@ -1,21 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { BatchRecord, EventPage, ImportPreview, LedgerEvent, LedgerSummary, PeriodSummary } from "./types";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { BatchRecord, EventPage, ImportPreview, LedgerEvent, LedgerSummary, MonthDashboard, PeriodSummary } from "./types";
+import billhubLogo from "./assets/billhub-mark.svg";
 import {
-  deleteBatch, importStatement, loadBatches, loadEvents, loadMonthlySummary, loadSummary, loadYearlySummary,
+  deleteBatch, importStatement, loadBatches, loadEvents, loadMonthDashboard, loadMonthlySummary, loadSummary, loadYearlySummary,
   pickStatement, previewStatement, updateEvent, updateEvents,
 } from "./lib/api";
 import { dateTime, fileName, labels, money } from "./lib/format";
 
 type Feedback = { kind: "success" | "error"; text: string } | null;
-type Tab = "import" | "events" | "analysis";
+type Tab = "dashboard" | "import" | "events" | "analysis";
 type AnalysisMode = "monthly" | "yearly";
 type EventEditor = Pick<LedgerEvent, "id" | "event_kind" | "lifecycle">;
 
 const eventKinds = ["payment", "refund", "transfer", "top_up", "withdrawal", "adjustment"];
 const lifecycles = ["settled", "pending", "unknown", "closed", "reversed"];
+const categoryColors = ["#226b4f", "#378ADD", "#9a6200", "#a63232", "#7a6aa6", "#548b8b"];
 
 function badgeClass(value: string) {
   return `badge badge-${value}`;
+}
+
+function currentMonth(): string {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function shiftMonth(period: string, offset: number): string {
+  const [year, month] = period.split("-").map(Number);
+  const date = new Date(year, month - 1 + offset, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 type TrendChartProps = {
@@ -35,6 +50,52 @@ function chartMoney(amountCents: number): string {
 function cashFlowMoney(amountCents: number, flow: "income" | "expense"): string {
   const signedAmount = flow === "expense" ? -amountCents : amountCents;
   return `${signedAmount > 0 ? "+" : ""}${money(signedAmount)}`;
+}
+
+function CategoryDonut({ categories, total }: { categories: MonthDashboard["categories"]; total: number }) {
+  const circumference = 2 * Math.PI * 48;
+  let offset = 0;
+  if (!categories.length || total <= 0) return <div className="dashboard-empty">本月暂无可统计的分类支出。</div>;
+  return (
+    <div className="category-chart">
+      <svg viewBox="0 0 120 120" role="img" aria-label="本月支出分类占比">
+        <circle cx="60" cy="60" r="48" fill="none" stroke="var(--paper)" strokeWidth="14" />
+        {categories.map((item, index) => {
+          const length = circumference * item.amount_cents / total;
+          const circle = <circle key={item.category} cx="60" cy="60" r="48" fill="none" stroke={categoryColors[index % categoryColors.length]} strokeWidth="14" strokeDasharray={`${length} ${circumference - length}`} strokeDashoffset={-offset} transform="rotate(-90 60 60)" />;
+          offset += length;
+          return circle;
+        })}
+        <text x="60" y="56" textAnchor="middle" className="donut-caption">支出</text>
+        <text x="60" y="72" textAnchor="middle" className="donut-total">{money(total)}</text>
+      </svg>
+      <ul className="category-legend">
+        {categories.map((item, index) => (
+          <li key={item.category}><i style={{ backgroundColor: categoryColors[index % categoryColors.length] }} /><span>{item.category}</span><strong>{total > 0 ? `${Math.round(item.amount_cents / total * 100)}%` : "0%"}</strong></li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SpendingCalendar({ period, dailyExpenses }: { period: string; dailyExpenses: MonthDashboard["daily_expenses"] }) {
+  const [year, month] = period.split("-").map(Number);
+  const dayCount = new Date(year, month, 0).getDate();
+  const startOffset = (new Date(year, month - 1, 1).getDay() + 6) % 7;
+  const expenses = new Map(dailyExpenses.map(({ day, amount_cents }) => [day, amount_cents] as const));
+  const maximum = Math.max(0, ...dailyExpenses.map((item) => item.amount_cents));
+  const cells = Array.from({ length: startOffset + dayCount }, (_, index) => {
+    const day = index - startOffset + 1;
+    if (day < 1) return <span key={`blank-${index}`} aria-hidden="true" />;
+    const amount = expenses.get(day) ?? 0;
+    const level = amount <= 0 ? 0 : maximum <= 0 ? 0 : Math.min(4, Math.ceil(amount / maximum * 4));
+    return <span key={day} className={`calendar-day heat-${level}`} title={`${month}月${day}日 · 支出 ${money(amount)}`} aria-label={`${month}月${day}日支出 ${money(amount)}`}>{day}</span>;
+  });
+  return <div className="spending-calendar" role="group" aria-label={`${year}年${month}月消费日历`}>
+    <div className="calendar-weekdays">{"一二三四五六日".split("").map((day) => <span key={day}>{day}</span>)}</div>
+    <div className="calendar-days">{cells}</div>
+    <div className="calendar-legend"><span>少</span>{[0, 1, 2, 3, 4].map((level) => <i key={level} className={`heat-${level}`} />)}<span>多</span></div>
+  </div>;
 }
 
 function TrendChart({ periods, mode, onSelectPeriod }: TrendChartProps) {
@@ -146,7 +207,7 @@ function TrendChart({ periods, mode, onSelectPeriod }: TrendChartProps) {
 }
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("import");
+  const [tab, setTab] = useState<Tab>("dashboard");
   const [filePath, setFilePath] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [replace, setReplace] = useState(false);
@@ -156,6 +217,11 @@ export default function App() {
   const [events, setEvents] = useState<LedgerEvent[]>([]);
   const [eventPage, setEventPage] = useState<EventPage | null>(null);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [dashboard, setDashboard] = useState<MonthDashboard | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dataVersion, setDataVersion] = useState(0);
   const [summary, setSummary] = useState<LedgerSummary | null>(null);
   const [monthly, setMonthly] = useState<PeriodSummary[]>([]);
   const [yearly, setYearly] = useState<PeriodSummary[]>([]);
@@ -214,20 +280,63 @@ export default function App() {
   }, [page, pageSize, providerFilter, cashFlowFilter, lifecycleFilter, periodFilter]);
 
   useEffect(() => { void refresh(); }, [refresh]);
-  useEffect(() => { void refreshEventPage(); }, [refreshEventPage]);
+  useEffect(() => {
+    if (tab !== "events") return;
+    void refreshEventPage();
+  }, [tab, refreshEventPage]);
+
+  useEffect(() => {
+    if (tab !== "dashboard") return;
+    let active = true;
+    setDashboardLoading(true);
+    void loadMonthDashboard(selectedMonth)
+      .then((nextDashboard) => { if (active) setDashboard(nextDashboard); })
+      .catch((error) => { if (active) setFeedback({ kind: "error", text: String(error) }); })
+      .finally(() => { if (active) setDashboardLoading(false); });
+    return () => { active = false; };
+  }, [tab, selectedMonth, dataVersion]);
+
+  const prepareStatement = useCallback(async (path: string) => {
+    if (!/\.(xlsx|csv)$/i.test(path)) {
+      setFeedback({ kind: "error", text: "请选择 XLSX 或 CSV 账单文件。" });
+      return;
+    }
+    setBusy(true);
+    setFeedback(null);
+    setFilePath(path);
+    setPreview(null);
+    try { setPreview(await previewStatement(path)); }
+    catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    finally { setBusy(false); }
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let active = true;
+    let unlisten: (() => void) | undefined;
+    void getCurrentWindow().onDragDropEvent((event) => {
+      if (event.payload.type === "enter" || event.payload.type === "over") setIsDragging(true);
+      else if (event.payload.type === "leave") setIsDragging(false);
+      else if (event.payload.type === "drop") {
+        setIsDragging(false);
+        const path = event.payload.paths.find((item) => /\.(xlsx|csv)$/i.test(item));
+        if (path) void prepareStatement(path);
+      }
+    }).then((stopListening) => {
+      if (active) unlisten = stopListening;
+      else stopListening();
+    });
+    return () => { active = false; unlisten?.(); };
+  }, [prepareStatement]);
 
   const chooseFile = async () => {
     setFeedback(null);
-    setBusy(true);
     try {
       const selected = await pickStatement();
       if (!selected) return;
-      setFilePath(selected);
-      setPreview(null);
-      setPreview(await previewStatement(selected));
+      await prepareStatement(selected);
     }
     catch (error) { setFeedback({ kind: "error", text: String(error) }); }
-    finally { setBusy(false); }
   };
 
   const importFile = async () => {
@@ -236,14 +345,15 @@ export default function App() {
     try {
       const batch = await importStatement(filePath, replace);
       setFeedback({ kind: "success", text: `导入成功：${labels[batch.provider] ?? batch.provider} ${batch.accepted_count} 条` });
-      setPreview(null); setFilePath(""); await refresh(); await refreshEventPage(); setTab("events");
+      setDataVersion((version) => version + 1);
+      setPreview(null); setFilePath(""); await refresh(); setTab("events");
     } catch (error) { setFeedback({ kind: "error", text: String(error) }); }
     finally { setBusy(false); }
   };
 
   const removeBatch = async (batch: BatchRecord) => {
     if (!window.confirm(`撤销批次将删除 ${batch.accepted_count} 条已入账记录，是否继续？`)) return;
-    try { await deleteBatch(batch.id); await refresh(); await refreshEventPage(); }
+    try { await deleteBatch(batch.id); setDataVersion((version) => version + 1); await refresh(); await refreshEventPage(); }
     catch (error) { setFeedback({ kind: "error", text: String(error) }); }
   };
 
@@ -253,6 +363,7 @@ export default function App() {
     try {
       const updated = await updateEvent(editingEvent.id, editingEvent.event_kind, editingEvent.lifecycle);
       if (!updated) throw new Error("未找到要修改的流水，请刷新后重试。");
+      setDataVersion((version) => version + 1);
       setEditingEvent(null);
       setFeedback({ kind: "success", text: "流水类型和状态已更新。" });
       await refresh();
@@ -284,6 +395,7 @@ export default function App() {
         batchEventKind || undefined,
         batchLifecycle || undefined,
       );
+      setDataVersion((version) => version + 1);
       setSelectedEventIds([]);
       setBatchEventKind("");
       setBatchLifecycle("");
@@ -304,6 +416,15 @@ export default function App() {
   };
 
   const periods = analysisMode === "monthly" ? monthly : yearly;
+  const [selectedYear, selectedMonthNumber] = selectedMonth.split("-").map(Number);
+  const previousDate = new Date(selectedYear, selectedMonthNumber - 2, 1);
+  const previousPeriod = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, "0")}`;
+  const previousPeriodSummary = monthly.find((item) => item.period === previousPeriod);
+  const monthTrend = (current: number, previous: number | undefined) => {
+    if (previous === undefined || previous === 0) return "暂无上月数据";
+    const difference = (current - previous) / previous * 100;
+    return `${difference >= 0 ? "▲" : "▼"} 较上月 ${difference >= 0 ? "+" : ""}${difference.toFixed(1)}%`;
+  };
   const analysisTotals = periods.reduce(
     (totals, period) => ({
       income: totals.income + period.income_cents,
@@ -317,22 +438,30 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><span>BillHub</span><small>本地账单导入</small></div>
+        <div className="brand"><img src={billhubLogo} alt="" /><div><span>BillHub</span><small>本地账单管理</small></div></div>
         <nav>
+          <button className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}>仪表盘</button>
           <button className={tab === "import" ? "active" : ""} onClick={() => setTab("import")}>导入中心</button>
           <button className={tab === "events" ? "active" : ""} onClick={() => setTab("events")}>流水</button>
           <button className={tab === "analysis" ? "active" : ""} onClick={() => setTab("analysis")}>收支分析</button>
         </nav>
-        <div className="privacy">本地优先 · 不上传账单</div>
+        <div className="privacy">本地优先<br />不上传账单</div>
       </aside>
 
       <main className="content">
         <header className="page-head">
           <div>
-            <h1>{tab === "import" ? "导入中心" : tab === "events" ? "统一流水" : "收支分析"}</h1>
-            <p>{tab === "import" ? "预览后再入账，完整批次可撤销" : tab === "events" ? "默认展示全部流水，可按平台、收支和状态筛选并编辑确认结果" : "实际支出已扣除退款金额"}</p>
+            <h1>{tab === "dashboard" ? "仪表盘" : tab === "import" ? "导入中心" : tab === "events" ? "流水明细" : "收支分析"}</h1>
+            <p>{tab === "dashboard" ? `${selectedYear}年${selectedMonthNumber}月 · 财务总览` : tab === "import" ? "预览后再入账，完整批次可撤销" : tab === "events" ? "按平台、收支与状态筛选，也可编辑和批量校正" : "实际支出已扣除退款金额"}</p>
           </div>
-          {summary && (
+          {tab === "dashboard" ? (
+            <div className="month-picker" role="group" aria-label="仪表盘月份切换">
+              <span>查看月份</span>
+              <button type="button" className="month-step" aria-label="上一个月" onClick={() => setSelectedMonth((month) => shiftMonth(month, -1))}>‹</button>
+              <input aria-label="选择仪表盘月份" type="month" value={selectedMonth} onChange={(event) => { if (/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) setSelectedMonth(event.target.value); }} />
+              <button type="button" className="month-step" aria-label="下一个月" onClick={() => setSelectedMonth((month) => shiftMonth(month, 1))}>›</button>
+            </div>
+          ) : summary && (
             <div className="summary-strip">
               <span>实际支出<strong>{money(summary.settled_expense_cents - summary.refund_income_cents)}</strong></span>
               <span>收入<strong>{money(summary.settled_income_cents - summary.refund_expense_cents)}</strong></span>
@@ -345,12 +474,41 @@ export default function App() {
 
         {feedback && <div className={`feedback ${feedback.kind}`}>{feedback.text}</div>}
 
+        {tab === "dashboard" && (
+          <section className="dashboard-panel" aria-busy={dashboardLoading}>
+            {dashboardLoading && dashboard?.period !== selectedMonth ? <div className="dashboard-loading">正在加载月度总览…</div> : !dashboard || dashboard.period !== selectedMonth ? (
+              <div className="dashboard-empty-state"><h2>请先导入账单，开始你的记账之旅</h2><p>导入微信或支付宝账单后，这里会显示月度收支、分类和消费节奏。</p><button className="primary" onClick={() => setTab("import")}>前往导入中心</button></div>
+            ) : (
+              <>
+                {dashboard.transaction_count === 0 && <div className="dashboard-empty-state compact"><span>本月还没有已入账交易</span><button className="ghost" onClick={() => setTab("import")}>导入账单</button></div>}
+                <div className="dashboard-primary-stats">
+                  <article className="stat-card income-card"><div className="label">本月收入</div><div className="value income-text">{money(dashboard.income_cents)}</div><div className={`trend ${dashboard.income_cents >= (previousPeriodSummary?.income_cents ?? dashboard.income_cents) ? "up" : "down"}`}>{monthTrend(dashboard.income_cents, previousPeriodSummary?.income_cents)}</div></article>
+                  <article className="stat-card expense-card"><div className="label">本月实际支出</div><div className="value expense-text">{money(dashboard.expense_cents)}</div><div className={`trend ${dashboard.expense_cents <= (previousPeriodSummary?.expense_cents ?? dashboard.expense_cents) ? "up" : "down"}`}>{monthTrend(dashboard.expense_cents, previousPeriodSummary?.expense_cents)}</div></article>
+                </div>
+                <div className="dashboard-secondary-stats">
+                  <article className="stat-card"><div className="label">本月结余</div><div className={`value ${dashboard.net_cents >= 0 ? "income-text" : "expense-text"}`}>{money(dashboard.net_cents)}</div></article>
+                  <article className="stat-card"><div className="label">交易笔数</div><div className="value">{dashboard.transaction_count} 笔</div></article>
+                  <article className="stat-card"><div className="label">待处理</div><div className="value pending-value">{dashboard.pending_count} 笔</div><div className="trend">需确认状态</div></article>
+                </div>
+                <div className="dashboard-insights">
+                  <article className="dashboard-card"><div className="section-heading"><div><h2>支出分类</h2><p>本月实际支出按分类分布</p></div></div><CategoryDonut categories={dashboard.categories} total={dashboard.categories.reduce((sum, category) => sum + category.amount_cents, 0)} /></article>
+                  <article className="dashboard-card"><div className="section-heading"><div><h2>消费日历</h2><p>颜色越深，当日支出越高</p></div></div><SpendingCalendar period={dashboard.period} dailyExpenses={dashboard.daily_expenses} /></article>
+                </div>
+                <article className="dashboard-card recent-card">
+                  <div className="section-heading"><div><h2>最近流水</h2><p>本月最新交易摘要</p></div><button className="ghost" onClick={() => { setPeriodFilter(selectedMonth); setCashFlowFilter("all"); setPage(1); setTab("events"); }}>查看全部</button></div>
+                  {dashboard.recent_events.length ? <div className="recent-list">{dashboard.recent_events.map((event) => <button className="recent-row" key={event.id} onClick={() => { setPeriodFilter(selectedMonth); setCashFlowFilter("all"); setPage(1); setTab("events"); }}><span className="recent-main"><strong>{event.counterparty ?? event.description ?? "未填写交易说明"}</strong><small>{dateTime(event.occurred_at)} · {labels[event.event_kind] ?? event.event_kind}</small></span><span className={`provider-tag provider-${event.provider}`}>{labels[event.provider] ?? event.provider}</span><strong className={`amount ${event.cash_flow}`}>{event.cash_flow === "expense" ? "−" : event.cash_flow === "income" ? "+" : ""}{money(event.amount_cents)}</strong></button>)}</div> : <div className="dashboard-empty">本月暂无流水。</div>}
+                </article>
+              </>
+            )}
+          </section>
+        )}
+
         {tab === "import" && (
           <section className="import-grid">
-            <div className="drop-card">
+            <div className={`drop-card${isDragging ? " dragging" : ""}`}>
               <div className="drop-icon">↧</div>
               <h2>选择账单文件</h2>
-              <p>支持微信 XLSX 和支付宝 CSV，解析在本地完成。</p>
+              <p>{isDragging ? "松开鼠标即可解析账单" : "拖放微信 XLSX 或支付宝 CSV 到此处，也可点击选择"}</p>
               <button className="primary" onClick={chooseFile} disabled={busy}>{busy ? "解析中..." : "选择文件"}</button>
               {filePath && <div className="selected-file" title={filePath}>{fileName(filePath)}</div>}
             </div>
@@ -398,7 +556,7 @@ export default function App() {
                   <p>{batch.accepted_count} 条入账 · {batch.rejected_count} 条问题</p>
                   <div className="batch-actions">
                     <code>{batch.file_sha256.slice(0, 12)}</code>
-                    <button onClick={() => removeBatch(batch)}>撤销</button>
+                    <button className="danger" onClick={() => removeBatch(batch)}>撤销</button>
                   </div>
                 </article>
               ))}
@@ -409,7 +567,10 @@ export default function App() {
         {tab === "events" && (
           <section className="events-panel">
             <div className="filters">
-              <label>平台<select value={providerFilter} onChange={(e) => { setProviderFilter(e.target.value); setPage(1); }}><option value="all">全部</option><option value="wechat">微信</option><option value="alipay">支付宝</option></select></label>
+              <div className="filter-group" role="group" aria-label="按平台筛选">
+                <span>平台</span>
+                {["all", "wechat", "alipay"].map((provider) => <button type="button" key={provider} className={`chip${providerFilter === provider ? " active" : ""}`} aria-pressed={providerFilter === provider} onClick={() => { setProviderFilter(provider); setPage(1); }}>{provider === "all" ? "全部" : labels[provider]}</button>)}
+              </div>
               <label>分类<select value={cashFlowFilter} onChange={(e) => { setCashFlowFilter(e.target.value); setPage(1); }}><option value="all">全部</option><option value="expense">支出</option><option value="income">收入</option><option value="refund">退款</option><option value="neutral">中性</option></select></label>
               <span className="refund-note">退款不计入收入</span>
               <label>状态<select value={lifecycleFilter} onChange={(e) => { setLifecycleFilter(e.target.value); setPage(1); }}><option value="all">全部</option><option value="settled">已完成</option><option value="pending">待确认</option><option value="unknown">待核实</option><option value="closed">已关闭</option><option value="reversed">已反转</option></select></label>
@@ -433,9 +594,9 @@ export default function App() {
                     <tr key={event.id}>
                       <td><input aria-label={`选择 ${event.provider_transaction_id}`} type="checkbox" checked={selectedEventIds.includes(event.id)} onChange={(e) => toggleEventSelection(event.id, e.target.checked)} /></td>
                       <td>{dateTime(event.occurred_at)}</td>
-                      <td>{labels[event.provider] ?? event.provider}</td>
+                      <td><span className={`provider-tag provider-${event.provider}`}>{labels[event.provider] ?? event.provider}</span></td>
                       <td>{labels[event.event_kind] ?? event.event_kind}</td>
-                      <td><strong>{event.counterparty ?? "—"}</strong><small>{event.description ?? ""}</small></td>
+                      <td><strong>{event.counterparty ?? "—"}</strong><small>{[event.description, event.funding_account].filter(Boolean).join(" · ")}</small></td>
                       <td>{event.funding_account ?? "—"}</td>
                       <td><span className={badgeClass(event.lifecycle)}>{labels[event.lifecycle] ?? event.lifecycle}</span></td>
                       <td className={`amount ${event.cash_flow}`}>{event.cash_flow === "expense" ? "-" : event.cash_flow === "income" ? "+" : ""}{money(event.amount_cents)}</td>

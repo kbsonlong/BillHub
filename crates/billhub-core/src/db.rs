@@ -41,6 +41,31 @@ pub struct PeriodSummary {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub struct CategoryTotal {
+    pub category: String,
+    pub amount_cents: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DailyExpense {
+    pub day: u32,
+    pub amount_cents: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct MonthDashboard {
+    pub period: String,
+    pub income_cents: i64,
+    pub expense_cents: i64,
+    pub net_cents: i64,
+    pub transaction_count: i64,
+    pub pending_count: i64,
+    pub categories: Vec<CategoryTotal>,
+    pub daily_expenses: Vec<DailyExpense>,
+    pub recent_events: Vec<LedgerEventRecord>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct LedgerEventRecord {
     pub id: String,
     pub batch_id: String,
@@ -627,6 +652,92 @@ impl LedgerStore {
 
     pub fn yearly_summary(&self) -> Result<Vec<PeriodSummary>> {
         self.period_summary("%Y")
+    }
+
+    pub fn month_dashboard(&self, period: &str) -> Result<Option<MonthDashboard>> {
+        if !is_period(period) || period.len() != 7 {
+            return Ok(None);
+        }
+        let Ok(start_date) = chrono::NaiveDate::parse_from_str(&format!("{period}-01"), "%Y-%m-%d") else {
+            return Ok(None);
+        };
+        let Some(end_date) = start_date.checked_add_months(chrono::Months::new(1)) else {
+            return Ok(None);
+        };
+        let to_epoch = |date: chrono::NaiveDate| {
+            date.and_hms_opt(0, 0, 0)
+                .expect("midnight is valid")
+                .and_utc()
+                .timestamp()
+                - 28_800
+        };
+        let start = to_epoch(start_date);
+        let end = to_epoch(end_date);
+        let (income_cents, expense_cents, transaction_count, pending_count) = self.connection.query_row(
+            "SELECT
+                COALESCE(SUM(CASE
+                    WHEN event_kind='payment' AND cash_flow='income' THEN amount_cents
+                    WHEN event_kind='refund' AND cash_flow='expense' THEN -amount_cents
+                    ELSE 0 END), 0),
+                COALESCE(SUM(CASE
+                    WHEN event_kind='payment' AND cash_flow='expense' THEN amount_cents
+                    WHEN event_kind='refund' AND cash_flow='income' THEN -amount_cents
+                    ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN lifecycle='settled' AND event_kind IN ('payment','refund')
+                    AND cash_flow IN ('income','expense') THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN lifecycle IN ('pending','unknown') THEN 1 ELSE 0 END), 0)
+             FROM ledger_events WHERE occurred_at >= ?1 AND occurred_at < ?2",
+            params![start, end],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?),),
+        )?;
+
+        let mut category_statement = self.connection.prepare(
+            "SELECT COALESCE(NULLIF(TRIM(raw_category), ''), '其他') AS category,
+                    SUM(CASE
+                        WHEN event_kind='payment' AND cash_flow='expense' THEN amount_cents
+                        WHEN event_kind='refund' AND cash_flow='income' THEN -amount_cents
+                        ELSE 0 END) AS amount_cents
+               FROM ledger_events
+              WHERE occurred_at >= ?1 AND occurred_at < ?2 AND lifecycle='settled'
+                AND ((event_kind='payment' AND cash_flow='expense') OR (event_kind='refund' AND cash_flow='income'))
+              GROUP BY category HAVING amount_cents > 0 ORDER BY amount_cents DESC",
+        )?;
+        let categories = category_statement
+            .query_map(params![start, end], |row| {
+                Ok(CategoryTotal { category: row.get(0)?, amount_cents: row.get(1)? })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        let mut daily_statement = self.connection.prepare(
+            "SELECT CAST(strftime('%d', occurred_at, 'unixepoch', '+8 hours') AS INTEGER) AS day,
+                    SUM(CASE
+                        WHEN event_kind='payment' AND cash_flow='expense' THEN amount_cents
+                        WHEN event_kind='refund' AND cash_flow='income' THEN -amount_cents
+                        ELSE 0 END) AS amount_cents
+               FROM ledger_events
+              WHERE occurred_at >= ?1 AND occurred_at < ?2 AND lifecycle='settled'
+                AND ((event_kind='payment' AND cash_flow='expense') OR (event_kind='refund' AND cash_flow='income'))
+              GROUP BY day ORDER BY day",
+        )?;
+        let daily_expenses = daily_statement
+            .query_map(params![start, end], |row| {
+                Ok(DailyExpense { day: row.get(0)?, amount_cents: row.get(1)? })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        let mut recent_statement = self.connection.prepare(
+            "SELECT id,batch_id,provider,occurred_at,event_kind,cash_flow,lifecycle,amount_cents,counterparty,description,raw_category,funding_account_id,provider_transaction_id,merchant_order_id,raw_json
+               FROM ledger_events WHERE occurred_at >= ?1 AND occurred_at < ?2
+              ORDER BY occurred_at DESC LIMIT 5",
+        )?;
+        let recent_events = recent_statement
+            .query_map(params![start, end], map_event)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let net_cents = income_cents - expense_cents;
+        Ok(Some(MonthDashboard {
+            period: period.to_owned(), income_cents, expense_cents, net_cents,
+            transaction_count, pending_count, categories, daily_expenses, recent_events,
+        }))
     }
 
     fn period_summary(&self, format: &str) -> Result<Vec<PeriodSummary>> {

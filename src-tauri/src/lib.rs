@@ -136,6 +136,14 @@ fn api_yearly_summary(state: State<AppState>) -> ApiResult<Vec<billhub_core::Per
 }
 
 #[tauri::command]
+fn api_month_dashboard(
+    period: String,
+    state: State<AppState>,
+) -> ApiResult<Option<billhub_core::MonthDashboard>> {
+    Ok(state.lock()?.month_dashboard(&period)?)
+}
+
+#[tauri::command]
 fn api_delete(batch_id: String, state: State<AppState>) -> ApiResult<bool> {
     Ok(state.lock()?.delete_batch(&batch_id)?)
 }
@@ -183,6 +191,7 @@ pub fn run() {
             api_summary,
             api_monthly_summary,
             api_yearly_summary,
+            api_month_dashboard,
             api_delete,
             api_pick_statement,
             api_database_path

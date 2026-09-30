@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { BatchRecord, EventFilters, EventPage, ImportPreview, LedgerSummary, PeriodSummary } from "../types";
+import type { BatchRecord, EventFilters, EventPage, ImportPreview, LedgerSummary, MonthDashboard, PeriodSummary } from "../types";
 
 const DESKTOP_REQUIRED = "当前为浏览器预览模式，请使用 npm run dev 启动 BillHub 桌面端。";
 
@@ -51,5 +51,8 @@ export const loadSummary = (includeNeutral = false, includePending = false) =>
 export const loadMonthlySummary = () => invokeDesktop<PeriodSummary[]>("api_monthly_summary");
 
 export const loadYearlySummary = () => invokeDesktop<PeriodSummary[]>("api_yearly_summary");
+
+export const loadMonthDashboard = (period: string) =>
+  invokeDesktop<MonthDashboard | null>("api_month_dashboard", { period });
 
 export const deleteBatch = (batchId: string) => invokeDesktop<boolean>("api_delete", { batchId });

@@ -7,7 +7,8 @@ pub mod parsers;
 pub mod service;
 
 pub use db::{
-    BatchRecord, EventPage, LedgerEventRecord, LedgerStore, LedgerSummary, PeriodSummary,
+    BatchRecord, CategoryTotal, DailyExpense, EventPage, LedgerEventRecord, LedgerStore,
+    LedgerSummary, MonthDashboard, PeriodSummary,
 };
 pub use detect::{ImportFile, ParsedStatement, PreviewSummary, detect_import_file};
 pub use events::*;

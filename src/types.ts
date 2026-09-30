@@ -78,3 +78,15 @@ export type PeriodSummary = {
   net_cents: number;
   transaction_count: number;
 };
+
+export type MonthDashboard = {
+  period: string;
+  income_cents: number;
+  expense_cents: number;
+  net_cents: number;
+  transaction_count: number;
+  pending_count: number;
+  categories: { category: string; amount_cents: number }[];
+  daily_expenses: { day: number; amount_cents: number }[];
+  recent_events: LedgerEvent[];
+};
