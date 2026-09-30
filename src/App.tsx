@@ -444,6 +444,7 @@ export default function App() {
           <button className={tab === "import" ? "active" : ""} onClick={() => setTab("import")}>导入中心</button>
           <button className={tab === "events" ? "active" : ""} onClick={() => setTab("events")}>流水</button>
           <button className={tab === "analysis" ? "active" : ""} onClick={() => setTab("analysis")}>收支分析</button>
+          <button onClick={() => window.location.assign("/docs/index.html")}>每日记账原型</button>
         </nav>
         <div className="privacy">本地优先<br />不上传账单</div>
       </aside>
