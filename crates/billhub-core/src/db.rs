@@ -31,6 +31,15 @@ pub struct LedgerSummary {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub struct PeriodSummary {
+    pub period: String,
+    pub income_cents: i64,
+    pub expense_cents: i64,
+    pub net_cents: i64,
+    pub transaction_count: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct LedgerEventRecord {
     pub id: String,
     pub batch_id: String,
@@ -345,6 +354,50 @@ impl LedgerStore {
             }
         }
         Ok(summary)
+    }
+
+    pub fn monthly_summary(&self) -> Result<Vec<PeriodSummary>> {
+        self.period_summary("%Y-%m")
+    }
+
+    pub fn yearly_summary(&self) -> Result<Vec<PeriodSummary>> {
+        self.period_summary("%Y")
+    }
+
+    fn period_summary(&self, format: &str) -> Result<Vec<PeriodSummary>> {
+        let mut statement = self.connection.prepare(
+            "SELECT strftime(?1, occurred_at, 'unixepoch', '+8 hours'),
+                    COALESCE(SUM(CASE
+                        WHEN event_kind='payment' AND cash_flow='income' THEN amount_cents
+                        WHEN event_kind='refund' AND cash_flow='expense' THEN -amount_cents
+                        ELSE 0
+                    END), 0),
+                    COALESCE(SUM(CASE
+                        WHEN event_kind='payment' AND cash_flow='expense' THEN amount_cents
+                        WHEN event_kind='refund' AND cash_flow='income' THEN -amount_cents
+                        ELSE 0
+                    END), 0),
+                    COUNT(*)
+             FROM ledger_events
+             WHERE lifecycle='settled'
+               AND event_kind IN ('payment', 'refund')
+               AND cash_flow IN ('income', 'expense')
+             GROUP BY strftime(?1, occurred_at, 'unixepoch', '+8 hours')
+             ORDER BY strftime(?1, occurred_at, 'unixepoch', '+8 hours') ASC",
+        )?;
+        let rows = statement.query_map(params![format], |row| {
+            let period = row.get::<_, String>(0)?;
+            let income_cents = row.get::<_, i64>(1)?;
+            let expense_cents = row.get::<_, i64>(2)?;
+            Ok(PeriodSummary {
+                period,
+                income_cents,
+                expense_cents,
+                net_cents: income_cents - expense_cents,
+                transaction_count: row.get(3)?,
+            })
+        })?;
+        Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
     }
 }
 

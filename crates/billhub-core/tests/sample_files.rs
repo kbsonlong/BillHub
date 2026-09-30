@@ -63,3 +63,45 @@ fn imports_blocks_duplicates_and_deletes_batch_atomically() {
     assert_eq!(store.events(false, false, 10).unwrap().len(), 10);
     assert!(store.delete_batch(&again.id).unwrap());
 }
+
+#[test]
+fn groups_imported_cash_flow_by_month_and_year() {
+    let Some(path) = sample_path(".csv") else {
+        eprintln!("skipping: local Alipay CSV is unavailable");
+        return;
+    };
+    let store = LedgerStore::in_memory().unwrap();
+    let file = ImportFile::from_path(&path).unwrap();
+    billhub_core::import(&store, &file, ImportOptions::default()).unwrap();
+
+    let monthly = store.monthly_summary().unwrap();
+    let yearly = store.yearly_summary().unwrap();
+    let monthly_income: i64 = monthly.iter().map(|period| period.income_cents).sum();
+    let monthly_expense: i64 = monthly.iter().map(|period| period.expense_cents).sum();
+    let yearly_income: i64 = yearly.iter().map(|period| period.income_cents).sum();
+    let yearly_expense: i64 = yearly.iter().map(|period| period.expense_cents).sum();
+    let summary = store.summary(false, false).unwrap();
+
+    assert!(!monthly.is_empty());
+    assert!(!yearly.is_empty());
+    assert_eq!(
+        monthly_income,
+        summary.settled_income_cents - summary.refund_expense_cents
+    );
+    assert_eq!(
+        monthly_expense,
+        summary.settled_expense_cents - summary.refund_income_cents
+    );
+    assert_eq!(yearly_income, monthly_income);
+    assert_eq!(yearly_expense, monthly_expense);
+    assert!(
+        monthly
+            .windows(2)
+            .all(|periods| periods[0].period < periods[1].period)
+    );
+    assert!(
+        yearly
+            .windows(2)
+            .all(|periods| periods[0].period < periods[1].period)
+    );
+}

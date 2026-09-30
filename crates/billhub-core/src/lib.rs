@@ -6,7 +6,7 @@ pub mod normalize;
 pub mod parsers;
 pub mod service;
 
-pub use db::{BatchRecord, LedgerEventRecord, LedgerStore};
+pub use db::{BatchRecord, LedgerEventRecord, LedgerStore, LedgerSummary, PeriodSummary};
 pub use detect::{ImportFile, ParsedStatement, PreviewSummary, detect_import_file};
 pub use events::*;
 pub use normalize::{RawStatementRow, SourceRow};
