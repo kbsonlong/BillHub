@@ -56,6 +56,22 @@ pnpm build
 
 ## 3. iOS 模拟器
 
+### 初始化或重新生成 iOS 工程与图标
+
+首次创建 iOS 工程，或需要按当前 Tauri 配置重新生成工程时，在仓库根目录运行：
+
+```bash
+rtk npm run tauri -- ios init
+```
+
+项目图标源文件是 `src-tauri/icons/logo.svg`。需要重新生成各平台图标（包括 iOS AppIcon）时运行：
+
+```bash
+rtk npm run tauri -- icon src-tauri/icons/logo.svg
+```
+
+命令默认将图标生成到 `src-tauri/icons/`，并更新 iOS 工程使用的 AppIcon 资源。初始化完成后可按下文启动模拟器或真机。`src-tauri/gen/apple/` 中的 Xcode 工程属于生成文件；重新初始化前，先将任何需要保留的 Xcode 手工配置迁回 Tauri 配置或源文件。
+
 1. 在 Xcode 的 **Settings > Platforms** 安装 iOS Simulator runtime，并从 **Window > Devices and Simulators** 确认目标模拟器可用。
 2. 用 `xcrun simctl list devices available` 查看可用设备名称。当前示例使用 `iPhone 17 Pro`；也可以换成已安装的机型。
 3. 在仓库根目录运行：
