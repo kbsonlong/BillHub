@@ -6,7 +6,7 @@ use crate::{
     normalize::{RawStatementRow, SourceRow},
 };
 use calamine::{Data, Reader, Xlsx};
-use chrono::{Duration, NaiveDate, NaiveDateTime};
+use chrono::{Duration, FixedOffset, NaiveDate, NaiveDateTime};
 use std::io::Cursor;
 
 pub struct WechatXlsxV1;
@@ -152,14 +152,25 @@ fn classify(direction: &str, status: &str) -> (EventKind, CashFlow, Lifecycle) {
 
 pub fn parse_datetime(value: &str) -> Option<i64> {
     if let Ok(dt) = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S") {
-        return Some(dt.and_utc().timestamp());
+        return china_timestamp(dt);
     }
     let numeric: f64 = value.parse().ok()?;
     let serial = numeric.trunc() as i64;
     let seconds = ((numeric - numeric.trunc()) * 86_400f64).round() as i64;
     // Excel's serial 1 is 1900-01-01 and includes its historical 1900 leap-year bug.
     let date = NaiveDate::from_ymd_opt(1899, 12, 30)?.checked_add_signed(Duration::days(serial))?;
-    Some(date.and_hms_opt(0, 0, 0)?.and_utc().timestamp() + seconds)
+    let datetime = date
+        .and_hms_opt(0, 0, 0)?
+        .checked_add_signed(Duration::seconds(seconds))?;
+    china_timestamp(datetime)
+}
+
+fn china_timestamp(datetime: NaiveDateTime) -> Option<i64> {
+    let offset = FixedOffset::east_opt(8 * 60 * 60)?;
+    datetime
+        .and_local_timezone(offset)
+        .single()
+        .map(|datetime| datetime.timestamp())
 }
 
 fn cell_text(value: &Data) -> String {
@@ -183,7 +194,7 @@ mod tests {
     #[test]
     fn parses_excel_serial_dates_with_leap_year_bug() {
         let actual = parse_datetime("46292.52381944445").unwrap();
-        assert_eq!(actual, 1_790_512_458);
+        assert_eq!(actual, 1_790_483_658);
     }
 
     #[test]

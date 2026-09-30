@@ -5,7 +5,7 @@ use crate::{
     events::{CashFlow, EventKind, Lifecycle},
     normalize::{RawStatementRow, SourceRow},
 };
-use chrono::NaiveDateTime;
+use chrono::{FixedOffset, NaiveDateTime};
 use csv::ReaderBuilder;
 use encoding_rs::GB18030;
 use std::collections::BTreeMap;
@@ -138,13 +138,10 @@ impl StatementParser for AlipayCsvV1 {
             });
         }
         let date_text = row.get("交易时间").unwrap_or("");
-        let occurred_at = NaiveDateTime::parse_from_str(date_text, "%Y-%m-%d %H:%M:%S")
-            .map_err(|_| Error::DateParseFailed {
-                row: row.row_number,
-                value: date_text.to_owned(),
-            })?
-            .and_utc()
-            .timestamp();
+        let occurred_at = parse_datetime(date_text).ok_or_else(|| Error::DateParseFailed {
+            row: row.row_number,
+            value: date_text.to_owned(),
+        })?;
         let direction = row.get("收/支").unwrap_or("unknown");
         let status = row.get("交易状态").unwrap_or("");
         let (event_kind, cash_flow, lifecycle) = classify(direction, status);
@@ -171,6 +168,15 @@ impl StatementParser for AlipayCsvV1 {
             source_row_hash: row.source_row_hash(),
         })
     }
+}
+
+fn parse_datetime(value: &str) -> Option<i64> {
+    let datetime = NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S").ok()?;
+    let offset = FixedOffset::east_opt(8 * 60 * 60)?;
+    datetime
+        .and_local_timezone(offset)
+        .single()
+        .map(|datetime| datetime.timestamp())
 }
 
 fn classify(direction: &str, status: &str) -> (EventKind, CashFlow, Lifecycle) {

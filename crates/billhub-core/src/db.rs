@@ -79,7 +79,8 @@ impl LedgerStore {
     }
 
     fn migrate(connection: &Connection) -> Result<()> {
-        connection.execute_batch(r"
+        let result = connection.execute_batch(r"
+            BEGIN IMMEDIATE;
             CREATE TABLE IF NOT EXISTS import_batches (
               id TEXT PRIMARY KEY,
               provider TEXT NOT NULL,
@@ -128,7 +129,23 @@ impl LedgerStore {
               code TEXT NOT NULL,
               message TEXT NOT NULL
             );
-        ")?;
+            UPDATE ledger_events
+               SET occurred_at = occurred_at - 28800,
+                   settled_at = CASE WHEN settled_at IS NULL THEN NULL ELSE settled_at - 28800 END
+             WHERE batch_id IN (
+               SELECT id FROM import_batches WHERE parser_version = '1'
+             );
+            UPDATE import_batches
+               SET parser_version = '2',
+                   range_start = CASE WHEN range_start IS NULL THEN NULL ELSE range_start - 28800 END,
+                   range_end = CASE WHEN range_end IS NULL THEN NULL ELSE range_end - 28800 END
+             WHERE parser_version = '1';
+            COMMIT;
+        ");
+        if result.is_err() {
+            let _ = connection.execute_batch("ROLLBACK");
+        }
+        result?;
         Ok(())
     }
 
