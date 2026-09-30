@@ -228,6 +228,38 @@ tr:last-child td { border-bottom: 0; }
 .period-link { font-weight: 700; }
 .period-link:focus-visible, .period-amount-button:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 3px; }
 
+.gamification-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 30px; margin-bottom: 14px; }
+.gamification-summary > div { display: grid; gap: 4px; min-width: 100px; }
+.gamification-summary .label, .muted { color: var(--muted); font-size: 12px; }
+.gamification-summary strong { color: var(--green); font-size: 20px; }
+.gamification-panel { display: grid; gap: 12px; }
+.gamification-panel > .section-heading { align-items: center; }
+.gamification-panel > .section-heading label, .task-day-field { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.gamification-panel input, .manual-entry-form input, .manual-entry-form select, .task-day-field input { min-height: 36px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); }
+.task-card { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow); }
+.task-card > div { flex: 1; min-width: 180px; }
+.task-card h3 { margin: 0; font-size: 15px; }
+.task-card p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.task-card.completed { border-color: #c8ddcf; background: var(--green-soft); }
+.task-xp { color: var(--green); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.manual-entry-card { max-width: 760px; }
+.manual-entry-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.manual-entry-form label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
+.manual-entry-form .manual-description { grid-column: 1 / -1; }
+.manual-entry-form button { justify-self: start; }
+.growth-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; min-height: 220px; align-items: end; }
+.growth-week article { display: grid; justify-items: center; align-content: end; gap: 7px; min-width: 0; height: 200px; padding: 10px 4px; border-radius: var(--radius-sm); background: #fbf9f4; color: var(--muted); font-size: 11px; }
+.growth-week article i { display: block; width: min(28px, 70%); min-height: 8px; border-radius: 6px 6px 2px 2px; background: #b9d8c4; }
+.growth-week article.completed i { background: var(--green); }
+.growth-week article strong { color: var(--ink); }
+.growth-week article span { color: var(--green); font-weight: 700; }
+.growth-week article small { white-space: nowrap; }
+.dashboard-growth-shortcut { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.dashboard-growth-shortcut > div { display: grid; gap: 4px; }
+.dashboard-growth-shortcut > div strong { color: var(--green); }
+.dashboard-growth-shortcut > div span { color: var(--muted); font-size: 12px; }
+.task-review-action { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--muted); font-size: 12px; }
+
 @media (max-width: 1050px) {
   .app-shell { grid-template-columns: minmax(0, 1fr); }
   .sidebar { position: static; height: auto; min-height: 0; flex-direction: row; align-items: center; gap: 20px; padding: 12px 20px; }
@@ -253,6 +285,10 @@ tr:last-child td { border-bottom: 0; }
   .dashboard-secondary-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .dashboard-secondary-stats .stat-card { padding: 12px 10px; }
   .dashboard-secondary-stats .value { font-size: 15px; }
+  .manual-entry-form { grid-template-columns: minmax(0, 1fr); }
+  .manual-entry-form .manual-description { grid-column: auto; }
+  .growth-week { gap: 4px; }
+  .growth-week article { font-size: 9px; }
   .category-chart { grid-template-columns: minmax(110px, .8fr) minmax(110px, 1fr); }
   .recent-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
   .recent-row .amount { grid-column: 1 / -1; text-align: left; }

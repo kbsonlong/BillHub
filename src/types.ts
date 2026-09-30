@@ -28,7 +28,7 @@ export type BatchRecord = {
 
 export type LedgerEvent = {
   id: string;
-  batch_id: string;
+  batch_id: string | null;
   provider: string;
   occurred_at: number;
   event_kind: string;
@@ -39,9 +39,20 @@ export type LedgerEvent = {
   description: string | null;
   raw_category: string | null;
   funding_account: string | null;
-  provider_transaction_id: string;
+  provider_transaction_id: string | null;
   merchant_order_id: string | null;
   raw_json: string;
+};
+
+export type DailyTask = { id: string; title: string; description: string; xp: number; completed: boolean };
+export type GamificationSnapshot = {
+  total_xp: number;
+  level: number;
+  xp_into_level: number;
+  next_level_xp: number;
+  streak_days: number;
+  week: { date: string; xp: number; completed: boolean }[];
+  tasks: DailyTask[];
 };
 
 export type EventPage = {

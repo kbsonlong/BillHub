@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { BatchRecord, EventPage, ImportPreview, LedgerEvent, LedgerSummary, MonthDashboard, PeriodSummary } from "./types";
+import type { BatchRecord, EventPage, GamificationSnapshot, ImportPreview, LedgerEvent, LedgerSummary, MonthDashboard, PeriodSummary } from "./types";
 import billhubLogo from "./assets/billhub-mark.svg";
 import {
-  deleteBatch, importStatement, loadBatches, loadEvents, loadMonthDashboard, loadMonthlySummary, loadSummary, loadYearlySummary,
+  completeDailyTask, createManualEntry, deleteBatch, importStatement, loadBatches, loadEvents, loadGamification, loadMonthDashboard, loadMonthlySummary, loadSummary, loadYearlySummary,
   pickStatement, previewStatement, updateEvent, updateEvents,
 } from "./lib/api";
 import { dateTime, fileName, labels, money } from "./lib/format";
 
 type Feedback = { kind: "success" | "error"; text: string } | null;
-type Tab = "dashboard" | "import" | "events" | "analysis";
+type Tab = "dashboard" | "import" | "events" | "analysis" | "tasks" | "manual" | "growth";
 type AnalysisMode = "monthly" | "yearly";
 type EventEditor = Pick<LedgerEvent, "id" | "event_kind" | "lifecycle">;
 
@@ -25,6 +25,10 @@ function badgeClass(value: string) {
 function currentMonth(): string {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function localDay(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function shiftMonth(period: string, offset: number): string {
@@ -223,6 +227,14 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
   const [summary, setSummary] = useState<LedgerSummary | null>(null);
+  const [gamification, setGamification] = useState<GamificationSnapshot | null>(null);
+  const [gamificationLoading, setGamificationLoading] = useState(false);
+  const [taskDay, setTaskDay] = useState(localDay);
+  const [manualDate, setManualDate] = useState(localDay);
+  const [manualAmount, setManualAmount] = useState("");
+  const [manualFlow, setManualFlow] = useState<"expense" | "income">("expense");
+  const [manualCategory, setManualCategory] = useState("");
+  const [manualDescription, setManualDescription] = useState("");
   const [monthly, setMonthly] = useState<PeriodSummary[]>([]);
   const [yearly, setYearly] = useState<PeriodSummary[]>([]);
   const [page, setPage] = useState(1);
@@ -280,6 +292,13 @@ export default function App() {
   }, [page, pageSize, providerFilter, cashFlowFilter, lifecycleFilter, periodFilter]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  const refreshGamification = useCallback(async () => {
+    setGamificationLoading(true);
+    try { setGamification(await loadGamification(taskDay)); }
+    catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    finally { setGamificationLoading(false); }
+  }, [taskDay]);
+  useEffect(() => { void refreshGamification(); }, [refreshGamification, dataVersion]);
   useEffect(() => {
     if (tab !== "events") return;
     void refreshEventPage();
@@ -343,11 +362,41 @@ export default function App() {
     if (!filePath) return;
     setBusy(true); setFeedback(null);
     try {
-      const batch = await importStatement(filePath, replace);
+      const batch = await importStatement(filePath, replace, taskDay);
       setFeedback({ kind: "success", text: `导入成功：${labels[batch.provider] ?? batch.provider} ${batch.accepted_count} 条` });
       setDataVersion((version) => version + 1);
       setPreview(null); setFilePath(""); await refresh(); setTab("events");
     } catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    finally { setBusy(false); }
+  };
+
+  const submitManualEntry = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const amountMatch = /^(\d+)(?:\.(\d{1,2}))?$/.exec(manualAmount.trim());
+    const amountCents = amountMatch ? Number(amountMatch[1]) * 100 + Number((amountMatch[2] ?? "").padEnd(2, "0")) : NaN;
+    if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
+      setFeedback({ kind: "error", text: "请输入大于 0 的有效金额。" });
+      return;
+    }
+    setBusy(true); setFeedback(null);
+    try {
+      const [year, month, day] = manualDate.split("-").map(Number);
+      const occurredAt = Math.floor(new Date(year, month - 1, day, 12).getTime() / 1000);
+      await createManualEntry({ occurredAt, amountCents, cashFlow: manualFlow, category: manualCategory.trim(), description: manualDescription.trim(), taskDay: manualDate });
+      setManualAmount(""); setManualCategory(""); setManualDescription("");
+      setFeedback({ kind: "success", text: "记账成功，流水与成长数据已更新。" });
+      setTaskDay(manualDate);
+      setDataVersion((version) => version + 1);
+      await refresh();
+      if (tab === "events") await refreshEventPage();
+    } catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    finally { setBusy(false); }
+  };
+
+  const finishTask = async (taskId: string) => {
+    setBusy(true); setFeedback(null);
+    try { setGamification(await completeDailyTask(taskId, taskDay)); setFeedback({ kind: "success", text: "每日任务已完成，XP 已更新。" }); }
+    catch (error) { setFeedback({ kind: "error", text: String(error) }); }
     finally { setBusy(false); }
   };
 
@@ -441,10 +490,12 @@ export default function App() {
         <div className="brand"><img src={billhubLogo} alt="" /><div><span>BillHub</span><small>本地账单管理</small></div></div>
         <nav>
           <button className={tab === "dashboard" ? "active" : ""} onClick={() => setTab("dashboard")}>仪表盘</button>
+          <button className={tab === "tasks" ? "active" : ""} onClick={() => setTab("tasks")}>每日任务</button>
+          <button className={tab === "manual" ? "active" : ""} onClick={() => setTab("manual")}>记一笔</button>
+          <button className={tab === "growth" ? "active" : ""} onClick={() => setTab("growth")}>成长记录</button>
           <button className={tab === "import" ? "active" : ""} onClick={() => setTab("import")}>导入中心</button>
           <button className={tab === "events" ? "active" : ""} onClick={() => setTab("events")}>流水</button>
           <button className={tab === "analysis" ? "active" : ""} onClick={() => setTab("analysis")}>收支分析</button>
-          <button onClick={() => window.location.assign("/docs/index.html")}>每日记账原型</button>
         </nav>
         <div className="privacy">本地优先<br />不上传账单</div>
       </aside>
@@ -452,8 +503,8 @@ export default function App() {
       <main className="content">
         <header className="page-head">
           <div>
-            <h1>{tab === "dashboard" ? "仪表盘" : tab === "import" ? "导入中心" : tab === "events" ? "流水明细" : "收支分析"}</h1>
-            <p>{tab === "dashboard" ? `${selectedYear}年${selectedMonthNumber}月 · 财务总览` : tab === "import" ? "预览后再入账，完整批次可撤销" : tab === "events" ? "按平台、收支与状态筛选，也可编辑和批量校正" : "实际支出已扣除退款金额"}</p>
+            <h1>{{ dashboard: "仪表盘", import: "导入中心", events: "流水明细", analysis: "收支分析", tasks: "每日任务", manual: "记一笔", growth: "成长记录" }[tab]}</h1>
+            <p>{tab === "dashboard" ? `${selectedYear}年${selectedMonthNumber}月 · 财务总览` : tab === "import" ? "预览后再入账，完整批次可撤销" : tab === "events" ? "按平台、收支与状态筛选，也可编辑和批量校正" : tab === "analysis" ? "实际支出已扣除退款金额" : tab === "tasks" ? "完成真实记账与复核任务，积累经验值" : tab === "manual" ? "记录一笔真实流水，并同步更新每日成长" : "经验值、等级与连续记账记录"}</p>
           </div>
           {tab === "dashboard" ? (
             <div className="month-picker" role="group" aria-label="仪表盘月份切换">
@@ -475,8 +526,48 @@ export default function App() {
 
         {feedback && <div className={`feedback ${feedback.kind}`}>{feedback.text}</div>}
 
+        {(tab === "tasks" || tab === "growth") && <div className="dashboard-card gamification-summary">
+          <div><span className="label">当前等级</span><strong>Lv. {gamification?.level ?? "—"}</strong></div>
+          <div><span className="label">累计经验</span><strong>{gamification?.total_xp ?? "—"} XP</strong></div>
+          <div><span className="label">本级经验</span><strong>{gamification ? `${gamification.xp_into_level} / ${gamification.next_level_xp}` : "—"}</strong></div>
+          <div><span className="label">连续记账</span><strong>{gamification?.streak_days ?? "—"} 天</strong></div>
+          {gamificationLoading && <span className="muted">正在同步成长数据…</span>}
+        </div>}
+
+        {tab === "tasks" && <section className="gamification-panel">
+          <div className="dashboard-card section-heading"><div><h2>今日任务</h2><p>完成状态由账本数据实时计算。</p></div><label>日期<input type="date" value={taskDay} onChange={(event) => setTaskDay(event.target.value)} /></label></div>
+          {gamification?.tasks.map((task) => <article className={`task-card${task.completed ? " completed" : ""}`} key={task.id}>
+            <div><h3>{task.title}</h3><p>{task.description}</p></div><span className="task-xp">+{task.xp} XP</span>
+            {task.id === "review_transactions" && !task.completed ? <button disabled={busy} onClick={() => { setTab("events"); setProviderFilter("all"); setPage(1); }}>前往流水复核</button> : <button className={task.completed ? "" : "primary"} disabled={busy || task.completed} onClick={() => void finishTask(task.id)}>{task.completed ? "已完成" : "标记完成"}</button>}
+          </article>)}
+          {!gamification?.tasks.length && <div className="dashboard-empty">{gamificationLoading ? "正在加载任务…" : "暂无每日任务数据。"}</div>}
+        </section>}
+
+        {tab === "manual" && <section className="dashboard-card manual-entry-card">
+          <div className="section-heading"><div><h2>记一笔</h2><p>保存后会进入完整流水，并刷新 XP 和每日任务。</p></div></div>
+          <form className="manual-entry-form" onSubmit={(event) => void submitManualEntry(event)}>
+            <label>收支<select value={manualFlow} onChange={(event) => setManualFlow(event.target.value as "expense" | "income")}><option value="expense">支出</option><option value="income">收入</option></select></label>
+            <label>金额（元）<input required inputMode="decimal" type="number" min="0.01" step="0.01" placeholder="0.00" value={manualAmount} onChange={(event) => setManualAmount(event.target.value)} /></label>
+            <label>日期<input required type="date" value={manualDate} onChange={(event) => setManualDate(event.target.value)} /></label>
+            <label>分类<input required maxLength={80} placeholder="餐饮、交通…" value={manualCategory} onChange={(event) => setManualCategory(event.target.value)} /></label>
+            <label className="manual-description">备注<input maxLength={500} placeholder="补充说明（选填）" value={manualDescription} onChange={(event) => setManualDescription(event.target.value)} /></label>
+            <button className="primary" type="submit" disabled={busy}>{busy ? "保存中…" : "保存流水"}</button>
+          </form>
+        </section>}
+
+        {tab === "growth" && <section className="dashboard-card growth-card">
+          <div className="section-heading"><div><h2>本周成长记录</h2><p>每天的经验值来自记账、导入和流水复核。</p></div></div>
+          <div className="growth-week">{gamification?.week.map((day) => <article key={day.date} className={day.completed ? "completed" : ""}><strong>{day.date.slice(5)}</strong><span>{day.xp} XP</span><i style={{ height: `${Math.max(8, Math.min(100, day.xp))}%` }} /><small>{day.completed ? "已完成" : "未完成"}</small></article>)}</div>
+          {!gamification?.week.length && <div className="dashboard-empty">{gamificationLoading ? "正在加载成长记录…" : "暂无成长记录。"}</div>}
+        </section>}
+
         {tab === "dashboard" && (
           <section className="dashboard-panel" aria-busy={dashboardLoading}>
+            <article className="dashboard-card dashboard-growth-shortcut">
+              <div><strong>{gamification ? `Lv. ${gamification.level} · ${gamification.total_xp} XP` : "成长数据加载中…"}</strong><span>{gamification ? `连续记账 ${gamification.streak_days} 天` : "每日任务与成长记录"}</span></div>
+              <button className="ghost" onClick={() => setTab("tasks")}>查看每日任务</button>
+              <button className="primary" onClick={() => setTab("manual")}>记一笔</button>
+            </article>
             {dashboardLoading && dashboard?.period !== selectedMonth ? <div className="dashboard-loading">正在加载月度总览…</div> : !dashboard || dashboard.period !== selectedMonth ? (
               <div className="dashboard-empty-state"><h2>请先导入账单，开始你的记账之旅</h2><p>导入微信或支付宝账单后，这里会显示月度收支、分类和消费节奏。</p><button className="primary" onClick={() => setTab("import")}>前往导入中心</button></div>
             ) : (
@@ -531,6 +622,7 @@ export default function App() {
                     <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
                     替换同指纹批次
                   </label>
+                  <label className="task-day-field">记入每日任务日期<input type="date" value={taskDay} onChange={(event) => setTaskDay(event.target.value)} /></label>
                   <div className="issues">
                     {preview.summary.warnings.map((warning) => <div key={warning} className="issue warning">{warning}</div>)}
                     {preview.summary.issues.map(([row, message]) => (
@@ -570,7 +662,7 @@ export default function App() {
             <div className="filters">
               <div className="filter-group" role="group" aria-label="按平台筛选">
                 <span>平台</span>
-                {["all", "wechat", "alipay"].map((provider) => <button type="button" key={provider} className={`chip${providerFilter === provider ? " active" : ""}`} aria-pressed={providerFilter === provider} onClick={() => { setProviderFilter(provider); setPage(1); }}>{provider === "all" ? "全部" : labels[provider]}</button>)}
+                {["all", "wechat", "alipay", "manual"].map((provider) => <button type="button" key={provider} className={`chip${providerFilter === provider ? " active" : ""}`} aria-pressed={providerFilter === provider} onClick={() => { setProviderFilter(provider); setPage(1); }}>{provider === "all" ? "全部" : labels[provider] ?? provider}</button>)}
               </div>
               <label>分类<select value={cashFlowFilter} onChange={(e) => { setCashFlowFilter(e.target.value); setPage(1); }}><option value="all">全部</option><option value="expense">支出</option><option value="income">收入</option><option value="refund">退款</option><option value="neutral">中性</option></select></label>
               <span className="refund-note">退款不计入收入</span>
@@ -578,6 +670,7 @@ export default function App() {
               {periodFilter && <span className="period-filter">时间：{periodFilter}<button onClick={() => { setPeriodFilter(null); setPage(1); }}>清除</button></span>}
               <span>共 {eventPage?.total_count ?? 0} 条</span>
             </div>
+            {gamification?.tasks.some((task) => task.id === "review_transactions" && !task.completed) && <div className="task-review-action"><span>流水已展示，可在检查后完成今日复核任务。</span><button className="primary" disabled={busy} onClick={() => void finishTask("review_transactions")}>完成今日复核</button></div>}
             {selectedEventIds.length > 0 && (
               <div className="batch-editor">
                 <strong>已选 {selectedEventIds.length} 条</strong>
@@ -593,7 +686,7 @@ export default function App() {
                 <tbody>
                   {events.map((event) => (
                     <tr key={event.id}>
-                      <td><input aria-label={`选择 ${event.provider_transaction_id}`} type="checkbox" checked={selectedEventIds.includes(event.id)} onChange={(e) => toggleEventSelection(event.id, e.target.checked)} /></td>
+                      <td><input aria-label={`选择 ${event.provider_transaction_id ?? event.id}`} type="checkbox" checked={selectedEventIds.includes(event.id)} onChange={(e) => toggleEventSelection(event.id, e.target.checked)} /></td>
                       <td>{dateTime(event.occurred_at)}</td>
                       <td><span className={`provider-tag provider-${event.provider}`}>{labels[event.provider] ?? event.provider}</span></td>
                       <td>{labels[event.event_kind] ?? event.event_kind}</td>

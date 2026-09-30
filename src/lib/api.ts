@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { BatchRecord, EventFilters, EventPage, ImportPreview, LedgerSummary, MonthDashboard, PeriodSummary } from "../types";
+import type { BatchRecord, EventFilters, EventPage, GamificationSnapshot, ImportPreview, LedgerEvent, LedgerSummary, MonthDashboard, PeriodSummary } from "../types";
 
 const DESKTOP_REQUIRED = "当前为浏览器预览模式，请使用 npm run dev 启动 BillHub 桌面端。";
 
@@ -31,8 +31,17 @@ export async function pickStatement(): Promise<string | null> {
 export const previewStatement = (filePath: string) =>
   invokeDesktop<ImportPreview>("api_preview", { filePath });
 
-export const importStatement = (filePath: string, replace: boolean) =>
-  invokeDesktop<BatchRecord>("api_import", { filePath, replace });
+export const importStatement = (filePath: string, replace: boolean, taskDay: string) =>
+  invokeDesktop<BatchRecord>("api_import", { filePath, replace, taskDay });
+
+export const loadGamification = (day: string) =>
+  invokeDesktop<GamificationSnapshot>("api_gamification", { day });
+
+export const completeDailyTask = (taskId: string, day: string) =>
+  invokeDesktop<GamificationSnapshot>("api_complete_daily_task", { taskId, day });
+
+export const createManualEntry = (entry: { occurredAt: number; amountCents: number; cashFlow: string; category: string; description: string; taskDay: string }) =>
+  invokeDesktop<LedgerEvent>("api_create_manual_entry", entry);
 
 export const loadBatches = () => invokeDesktop<BatchRecord[]>("api_batches");
 
