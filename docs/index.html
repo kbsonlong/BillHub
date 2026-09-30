@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111412">
+  <title>小账闯关 · 每日记账</title>
+  <link rel="stylesheet" href="prototype.css">
+</head>
+<body>
+  <div class="phone-frame" data-phone-shell data-platform="neutral">
+    <span class="hardware-button volume" aria-hidden="true"></span><span class="hardware-button power" aria-hidden="true"></span>
+    <section class="phone-screen" data-phone-screen>
+      <main class="phone-content" data-phone-content>
+        <div class="app">
+          <aside class="desktop-sidebar" aria-label="桌面导航" data-od-id="desktop-sidebar">
+            <div class="desktop-brand"><span class="brand-mark">账</span><span>小账闯关</span></div>
+            <nav class="desktop-nav" aria-label="应用导航"><button type="button" data-go="today" class="active" aria-current="page"><span class="nav-symbol">▦</span>今日任务</button><button type="button" data-go="cover"><span class="nav-symbol">⌂</span>成长记录</button><button type="button" data-go="detail"><span class="nav-symbol">＋</span>记一笔</button></nav>
+            <div class="side-growth"><p class="eyebrow">当前连续记录</p><strong>5 天</strong><p>完成今天的记账任务，继续保持节奏。</p></div>
+          </aside>
+          <div class="app-workspace">
+          <div class="topline" data-od-id="brand-row"><p class="eyebrow">DAILY QUESTS · 每日成长</p><div class="brand"><span class="brand-mark">账</span>小账闯关</div></div>
+          <section class="view" id="cover" aria-labelledby="cover-title" data-od-id="growth-cover">
+            <div class="poster">
+              <div><p class="eyebrow">把好习惯，玩成一场成长</p><h1 id="cover-title">每天一点点，<br><em>成为更好的</em><br>自己。</h1><p class="poster-copy">记下一笔日常，完成一个小任务。让每一次认真生活，都变成看得见的成长。</p></div>
+              <div class="streak-preview" aria-label="连续记账七天中的五天已完成"><div><strong>5 天</strong><small>连续记账中 · 再坚持一天</small></div><div class="week" aria-hidden="true"><span class="day done">一<b>✓</b></span><span class="day done">二<b>✓</b></span><span class="day done">三<b>✓</b></span><span class="day done">四<b>✓</b></span><span class="day done">五<b>✓</b></span><span class="day today">六<b>·</b></span><span class="day">日<b>·</b></span></div></div>
+              <div class="poster-foot"><span>记一笔 · 得经验 · 升一级<br>今天也算数。</span><button type="button" data-go="today">进入今日任务　↗</button></div>
+            </div>
+          </section>
+          <section class="view active" id="today" aria-labelledby="today-title" data-od-id="today-quests">
+            <div class="greeting"><div><p class="eyebrow">星期六 · 9 月 30 日</p><h1 id="today-title">早上好，Sam</h1></div><div class="avatar" aria-label="个人头像">S</div></div>
+            <div class="xp-panel" data-od-id="level-progress"><div class="xp-head"><div class="level"><span>LV 14</span>　记账探索者</div><div class="xp-totals">1,648 / 2,480 XP</div></div><div class="progress" role="progressbar" aria-label="距离下一级经验进度" aria-valuenow="66" aria-valuemin="0" aria-valuemax="100"><i></i></div><div class="xp-foot"><span>距离下一级还差 832 XP</span><span>等级 15</span></div></div>
+            <div class="today-summary"><div><h2>今日任务</h2><p>还有 3 个小目标等你完成</p></div><strong>今日可得 +140 XP</strong></div>
+            <div class="quest-list" data-od-id="quest-grid">
+              <button class="quest completed" type="button" data-quest="早餐记一笔"><span class="quest-icon" style="background:#344330;color:#d0f18e">¥</span><h3>记录早餐</h3><p>补上一笔晨间消费</p><span class="reward">+20 XP</span></button>
+              <button class="quest" type="button" data-quest="整理昨日账单"><span class="quest-icon" style="background:#3b3030;color:#ffab96">↗</span><h3>整理昨日账单</h3><p>确认分类与备注</p><span class="reward">+30 XP</span></button>
+              <button class="quest" type="button" data-quest="查看本周支出"><span class="quest-icon" style="background:#303a48;color:#b5d0ff">▥</span><h3>回看本周</h3><p>发现一条消费规律</p><span class="reward">+40 XP</span></button>
+              <button class="quest" type="button" data-quest="设定下周预算"><span class="quest-icon" style="background:#403a2a;color:#f2d98d">◎</span><h3>设定预算</h3><p>给下周一个小目标</p><span class="reward">+50 XP</span></button>
+            </div>
+            <div class="checkin" data-od-id="streak-record"><span class="check-icon">✓</span><div><strong>连续记账 5 天</strong><p>再完成今天的记录，连胜就到 6 天</p></div></div>
+            <section class="desktop-side-panel" aria-labelledby="ledger-title" data-od-id="recent-ledger"><h3 id="ledger-title">最近记账</h3><ul class="ledger-list" id="ledger-list"><li class="ledger-row"><span>咖啡 · 餐饮<small>今天 · 示例记录</small></span><span>¥28.50</span></li><li class="ledger-row"><span>地铁 · 交通<small>今天 · 示例记录</small></span><span>¥6.00</span></li></ul><p class="sample-note">示例内容仅用于展示，不代表真实账目。</p></section>
+            <nav class="screen-nav" aria-label="主导航" data-od-id="main-navigation"><button class="nav-btn" data-go="cover"><b>⌂</b>成长</button><button class="nav-btn active" data-go="today" aria-current="page"><b>▦</b>任务</button><button class="nav-btn" data-go="detail"><b>＋</b>记一笔</button></nav>
+          </section>
+          <section class="view" id="detail" aria-labelledby="detail-title" data-od-id="quest-detail">
+            <div class="detail-head"><button class="back od-touch" type="button" aria-label="返回今日任务" data-go="today">‹</button><h2 id="detail-title">任务详情</h2></div>
+            <div class="hero"><span class="quest-icon">¥</span><p class="eyebrow">TODAY'S QUEST · 01</p><h1 id="quest-name">记下今天的第一笔</h1><p>认真记下每一笔，不是为了限制生活，而是更了解自己把日子过成了什么样。</p><span class="reward-stamp">完成奖励　+30 XP</span></div>
+            <h3 class="section-title">闯关步骤</h3><ul class="steps"><li class="step done"><span class="step-mark">✓</span><span>打开今天的账本</span></li><li class="step"><span class="step-mark">2</span><span>记录一笔真实消费或收入</span></li><li class="step"><span class="step-mark">3</span><span>选好分类，写下简短备注</span></li></ul>
+            <form class="entry-form" id="entry-form" novalidate>
+              <div class="entry-field"><label for="amount">金额（元）</label><input id="amount" name="amount" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="例如 28.50" required aria-describedby="amount-error"><span class="field-error" id="amount-error"></span></div>
+              <div class="entry-field"><label for="category">账目分类</label><select id="category" name="category" required aria-describedby="category-error"><option value="">请选择分类</option><option>餐饮</option><option>交通</option><option>购物</option><option>居家</option><option>娱乐</option><option>医疗</option><option>收入</option><option>其他</option></select><span class="field-error" id="category-error"></span></div>
+              <button class="primary" id="start-quest" type="submit">保存记录并完成任务</button>
+            </form><div class="toast" id="feedback" role="status" aria-live="polite"></div>
+            <nav class="screen-nav" aria-label="主导航"><button class="nav-btn" data-go="cover"><b>⌂</b>成长</button><button class="nav-btn" data-go="today"><b>▦</b>任务</button><button class="nav-btn active" data-go="detail" aria-current="page"><b>＋</b>记一笔</button></nav>
+          </section>
+          </div>
+        </div>
+      </main>
+      <div class="status-bar" aria-hidden="true"><span class="status-time">9:41</span><span class="status-cutout-zone"></span><span class="status-icons"><svg viewBox="0 0 15 12"><path d="M1 10V8m4 2V5m4 5V3m4 7V1"/></svg><svg viewBox="0 0 16 12"><path d="M1 4.5a10 10 0 0 1 14 0M4 7a5.8 5.8 0 0 1 8 0m-5.5 2.5a2 2 0 0 1 3 0"/></svg><svg class="battery" viewBox="0 0 20 11"><rect x=".75" y="1.25" width="16.5" height="8.5" rx="2"/><path d="M18.5 4v3M3.2 3.4h10.4v4.2H3.2z" fill="currentColor" stroke="none"/></svg></span></div>
+      <div class="camera-dot" aria-hidden="true"></div><div class="gesture-indicator" aria-hidden="true"></div>
+    </section>
+  </div>
+  <script src="prototype.js" defer></script>
+</body>
+</html>
