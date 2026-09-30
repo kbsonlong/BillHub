@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#111412">
-  <title>小账闯关 · 每日记账</title>
-  <link rel="stylesheet" href="prototype.css">
+  <title>BillHub · 账单概况</title>
+  <link rel="stylesheet" href="./prototype.css">
 </head>
 <body>
   <div class="phone-frame" data-phone-shell data-platform="neutral">
@@ -14,43 +14,35 @@
       <main class="phone-content" data-phone-content>
         <div class="app">
           <aside class="desktop-sidebar" aria-label="桌面导航" data-od-id="desktop-sidebar">
-            <div class="desktop-brand"><span class="brand-mark">账</span><span>小账闯关</span></div>
-            <nav class="desktop-nav" aria-label="应用导航"><button type="button" data-go="today" class="active" aria-current="page"><span class="nav-symbol">▦</span>今日任务</button><button type="button" data-go="cover"><span class="nav-symbol">⌂</span>成长记录</button><button type="button" data-go="detail"><span class="nav-symbol">＋</span>记一笔</button></nav>
-            <div class="side-growth"><p class="eyebrow">当前连续记录</p><strong>5 天</strong><p>完成今天的记账任务，继续保持节奏。</p></div>
+            <div class="desktop-brand"><span class="brand-mark">账</span><span>BillHub</span></div>
+            <nav class="desktop-nav" aria-label="应用导航"><button type="button" data-go="today" class="active" aria-current="page"><span class="nav-symbol">▦</span>账单概况</button><button type="button" data-go="cover"><span class="nav-symbol">⌂</span>月度账单</button><button type="button" data-go="detail"><span class="nav-symbol">⇧</span>导入账单</button></nav>
+            <div class="side-growth"><p class="eyebrow">本地账本</p><strong>数据私有</strong><p>账单数据保存在此设备的本地数据库。</p></div>
           </aside>
           <div class="app-workspace">
-          <div class="topline" data-od-id="brand-row"><p class="eyebrow">DAILY QUESTS · 每日成长</p><div class="brand"><span class="brand-mark">账</span>小账闯关</div></div>
-          <section class="view" id="cover" aria-labelledby="cover-title" data-od-id="growth-cover">
-            <div class="poster">
-              <div><p class="eyebrow">把好习惯，玩成一场成长</p><h1 id="cover-title">每天一点点，<br><em>成为更好的</em><br>自己。</h1><p class="poster-copy">记下一笔日常，完成一个小任务。让每一次认真生活，都变成看得见的成长。</p></div>
-              <div class="streak-preview" aria-label="连续记账七天中的五天已完成"><div><strong>5 天</strong><small>连续记账中 · 再坚持一天</small></div><div class="week" aria-hidden="true"><span class="day done">一<b>✓</b></span><span class="day done">二<b>✓</b></span><span class="day done">三<b>✓</b></span><span class="day done">四<b>✓</b></span><span class="day done">五<b>✓</b></span><span class="day today">六<b>·</b></span><span class="day">日<b>·</b></span></div></div>
-              <div class="poster-foot"><span>记一笔 · 得经验 · 升一级<br>今天也算数。</span><button type="button" data-go="today">进入今日任务　↗</button></div>
+          <div class="topline" data-od-id="brand-row"><p class="eyebrow">BILLHUB · 本地账本</p><div class="brand"><span class="brand-mark">账</span>BillHub</div></div>
+          <div class="toast app-status" id="feedback" role="status" aria-live="polite"></div>
+          <p class="runtime-notice" id="runtime-notice" role="status" hidden>账单数据与导入功能需要在 BillHub 桌面应用中使用；请从应用内打开此页面。</p>
+          <section class="view" id="cover" aria-labelledby="cover-title">
+            <div class="poster overview-poster">
+              <div><p class="eyebrow">MONTHLY OVERVIEW · 月度账单</p><h1 id="cover-title">看清每一笔，<br><em>安排好生活。</em></h1><p class="poster-copy">汇总来自本地账本的收入、支出和分类。选择月份查看真实账单数据。</p></div>
+              <div class="overview-stats"><article><span>收入</span><strong id="month-income">—</strong></article><article><span>支出</span><strong id="month-expense">—</strong></article><article><span>结余</span><strong id="month-net">—</strong></article></div>
+              <div class="month-picker"><label for="period">账单月份</label><input id="period" type="month"></div>
+              <section class="data-panel"><h2>支出分类</h2><ul class="category-list" id="category-list"><li class="empty-state">正在读取账单…</li></ul></section>
+              <nav class="screen-nav" aria-label="主导航"><button class="nav-btn" data-go="cover"><b>⌂</b>月度</button><button class="nav-btn" data-go="today"><b>▦</b>概况</button><button class="nav-btn" data-go="detail"><b>⇧</b>导入</button></nav>
             </div>
           </section>
-          <section class="view active" id="today" aria-labelledby="today-title" data-od-id="today-quests">
-            <div class="greeting"><div><p class="eyebrow">星期六 · 9 月 30 日</p><h1 id="today-title">早上好，Sam</h1></div><div class="avatar" aria-label="个人头像">S</div></div>
-            <div class="xp-panel" data-od-id="level-progress"><div class="xp-head"><div class="level"><span>LV 14</span>　记账探索者</div><div class="xp-totals">1,648 / 2,480 XP</div></div><div class="progress" role="progressbar" aria-label="距离下一级经验进度" aria-valuenow="66" aria-valuemin="0" aria-valuemax="100"><i></i></div><div class="xp-foot"><span>距离下一级还差 832 XP</span><span>等级 15</span></div></div>
-            <div class="today-summary"><div><h2>今日任务</h2><p>还有 3 个小目标等你完成</p></div><strong>今日可得 +140 XP</strong></div>
-            <div class="quest-list" data-od-id="quest-grid">
-              <button class="quest completed" type="button" data-quest="早餐记一笔"><span class="quest-icon" style="background:#344330;color:#d0f18e">¥</span><h3>记录早餐</h3><p>补上一笔晨间消费</p><span class="reward">+20 XP</span></button>
-              <button class="quest" type="button" data-quest="整理昨日账单"><span class="quest-icon" style="background:#3b3030;color:#ffab96">↗</span><h3>整理昨日账单</h3><p>确认分类与备注</p><span class="reward">+30 XP</span></button>
-              <button class="quest" type="button" data-quest="查看本周支出"><span class="quest-icon" style="background:#303a48;color:#b5d0ff">▥</span><h3>回看本周</h3><p>发现一条消费规律</p><span class="reward">+40 XP</span></button>
-              <button class="quest" type="button" data-quest="设定下周预算"><span class="quest-icon" style="background:#403a2a;color:#f2d98d">◎</span><h3>设定预算</h3><p>给下周一个小目标</p><span class="reward">+50 XP</span></button>
-            </div>
-            <div class="checkin" data-od-id="streak-record"><span class="check-icon">✓</span><div><strong>连续记账 5 天</strong><p>再完成今天的记录，连胜就到 6 天</p></div></div>
-            <section class="desktop-side-panel" aria-labelledby="ledger-title" data-od-id="recent-ledger"><h3 id="ledger-title">最近记账</h3><ul class="ledger-list" id="ledger-list"><li class="ledger-row"><span>咖啡 · 餐饮<small>今天 · 示例记录</small></span><span>¥28.50</span></li><li class="ledger-row"><span>地铁 · 交通<small>今天 · 示例记录</small></span><span>¥6.00</span></li></ul><p class="sample-note">示例内容仅用于展示，不代表真实账目。</p></section>
-            <nav class="screen-nav" aria-label="主导航" data-od-id="main-navigation"><button class="nav-btn" data-go="cover"><b>⌂</b>成长</button><button class="nav-btn active" data-go="today" aria-current="page"><b>▦</b>任务</button><button class="nav-btn" data-go="detail"><b>＋</b>记一笔</button></nav>
+          <section class="view active" id="today" aria-labelledby="today-title">
+            <div class="greeting"><div><p class="eyebrow" id="today-period">本地账本 · 本月</p><h1 id="today-title">账单概况</h1></div><div class="avatar" aria-label="BillHub">账</div></div>
+            <div class="summary-cards"><article class="summary-card"><span>累计支出</span><strong id="summary-expense">—</strong></article><article class="summary-card"><span>累计收入</span><strong id="summary-income">—</strong></article><article class="summary-card"><span>待确认</span><strong id="summary-pending">—</strong></article><article class="summary-card"><span>待分类</span><strong id="summary-unknown">—</strong></article></div>
+            <section class="desktop-side-panel recent-panel" aria-labelledby="ledger-title"><div class="panel-heading"><h2 id="ledger-title">最近流水</h2><span id="event-count"></span></div><ul class="ledger-list" id="ledger-list"><li class="empty-state">正在读取本地账本…</li></ul></section>
+            <section class="desktop-side-panel imports-panel" aria-labelledby="imports-title"><div class="panel-heading"><h2 id="imports-title">最近导入</h2></div><ul class="batch-list" id="batch-list"><li class="empty-state">正在读取导入记录…</li></ul></section>
+            <nav class="screen-nav" aria-label="主导航"><button class="nav-btn" data-go="cover"><b>⌂</b>月度</button><button class="nav-btn active" data-go="today"><b>▦</b>概况</button><button class="nav-btn" data-go="detail"><b>⇧</b>导入</button></nav>
           </section>
-          <section class="view" id="detail" aria-labelledby="detail-title" data-od-id="quest-detail">
-            <div class="detail-head"><button class="back od-touch" type="button" aria-label="返回今日任务" data-go="today">‹</button><h2 id="detail-title">任务详情</h2></div>
-            <div class="hero"><span class="quest-icon">¥</span><p class="eyebrow">TODAY'S QUEST · 01</p><h1 id="quest-name">记下今天的第一笔</h1><p>认真记下每一笔，不是为了限制生活，而是更了解自己把日子过成了什么样。</p><span class="reward-stamp">完成奖励　+30 XP</span></div>
-            <h3 class="section-title">闯关步骤</h3><ul class="steps"><li class="step done"><span class="step-mark">✓</span><span>打开今天的账本</span></li><li class="step"><span class="step-mark">2</span><span>记录一笔真实消费或收入</span></li><li class="step"><span class="step-mark">3</span><span>选好分类，写下简短备注</span></li></ul>
-            <form class="entry-form" id="entry-form" novalidate>
-              <div class="entry-field"><label for="amount">金额（元）</label><input id="amount" name="amount" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="例如 28.50" required aria-describedby="amount-error"><span class="field-error" id="amount-error"></span></div>
-              <div class="entry-field"><label for="category">账目分类</label><select id="category" name="category" required aria-describedby="category-error"><option value="">请选择分类</option><option>餐饮</option><option>交通</option><option>购物</option><option>居家</option><option>娱乐</option><option>医疗</option><option>收入</option><option>其他</option></select><span class="field-error" id="category-error"></span></div>
-              <button class="primary" id="start-quest" type="submit">保存记录并完成任务</button>
-            </form><div class="toast" id="feedback" role="status" aria-live="polite"></div>
-            <nav class="screen-nav" aria-label="主导航"><button class="nav-btn" data-go="cover"><b>⌂</b>成长</button><button class="nav-btn" data-go="today"><b>▦</b>任务</button><button class="nav-btn active" data-go="detail" aria-current="page"><b>＋</b>记一笔</button></nav>
+          <section class="view" id="detail" aria-labelledby="detail-title">
+            <div class="detail-head"><button class="back od-touch" type="button" aria-label="返回账单概况" data-go="today">‹</button><h2 id="detail-title">导入账单</h2></div>
+            <div class="hero"><span class="quest-icon">⇧</span><p class="eyebrow">STATEMENT IMPORT · 本地导入</p><h1>导入微信或支付宝账单</h1><p>选择账单文件，先查看解析结果和重复提示；确认后写入本地账本。</p></div>
+            <div class="import-controls"><button class="primary" id="pick-statement" type="button">选择账单文件</button><p class="import-file" id="selected-file">尚未选择文件</p><section class="import-preview" id="import-preview" hidden aria-live="polite"></section><button class="primary" id="confirm-import" type="button" hidden>确认导入</button></div>
+            <nav class="screen-nav" aria-label="主导航"><button class="nav-btn" data-go="cover"><b>⌂</b>月度</button><button class="nav-btn" data-go="today"><b>▦</b>概况</button><button class="nav-btn active" data-go="detail"><b>⇧</b>导入</button></nav>
           </section>
           </div>
         </div>
@@ -59,6 +51,6 @@
       <div class="camera-dot" aria-hidden="true"></div><div class="gesture-indicator" aria-hidden="true"></div>
     </section>
   </div>
-  <script src="prototype.js" defer></script>
+  <script type="module" src="./prototype.js"></script>
 </body>
 </html>
