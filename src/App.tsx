@@ -157,29 +157,35 @@ export default function App() {
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("monthly");
 
   const refresh = useCallback(async () => {
-    const [nextBatches, nextEvents, nextSummary, nextMonthly, nextYearly] = await Promise.all([
-      loadBatches(), loadEvents(100, includeNeutral, includePending),
-      loadSummary(includeNeutral, includePending),
-      loadMonthlySummary(),
-      loadYearlySummary(),
-    ]);
-    setBatches(nextBatches);
-    setEvents(nextEvents);
-    setSummary(nextSummary);
-    setMonthly(nextMonthly);
-    setYearly(nextYearly);
+    try {
+      const [nextBatches, nextEvents, nextSummary, nextMonthly, nextYearly] = await Promise.all([
+        loadBatches(), loadEvents(100, includeNeutral, includePending),
+        loadSummary(includeNeutral, includePending),
+        loadMonthlySummary(),
+        loadYearlySummary(),
+      ]);
+      setBatches(nextBatches);
+      setEvents(nextEvents);
+      setSummary(nextSummary);
+      setMonthly(nextMonthly);
+      setYearly(nextYearly);
+    } catch (error) {
+      setFeedback({ kind: "error", text: String(error) });
+    }
   }, [includeNeutral, includePending]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
   const chooseFile = async () => {
     setFeedback(null);
-    const selected = await pickStatement();
-    if (!selected) return;
-    setFilePath(selected);
-    setPreview(null);
     setBusy(true);
-    try { setPreview(await previewStatement(selected)); }
+    try {
+      const selected = await pickStatement();
+      if (!selected) return;
+      setFilePath(selected);
+      setPreview(null);
+      setPreview(await previewStatement(selected));
+    }
     catch (error) { setFeedback({ kind: "error", text: String(error) }); }
     finally { setBusy(false); }
   };
@@ -232,8 +238,8 @@ export default function App() {
           </div>
           {summary && (
             <div className="summary-strip">
-              <span>支出<strong>{money(summary.settled_expense_cents - summary.refund_income_cents)}</strong></span>
-              <span>收入<strong>{money(summary.settled_income_cents - summary.refund_expense_cents)}</strong></span>
+              <span>支出<strong>{money(summary.settled_expense_cents)}</strong></span>
+              <span>收入<strong>{money(summary.settled_income_cents + summary.refund_income_cents)}</strong></span>
               <span>待确认<strong>{summary.pending_count}</strong></span>
               <span>中性<strong>{summary.neutral_count}</strong></span>
             </div>

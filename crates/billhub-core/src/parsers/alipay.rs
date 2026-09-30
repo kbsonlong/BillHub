@@ -179,32 +179,26 @@ fn parse_datetime(value: &str) -> Option<i64> {
         .map(|datetime| datetime.timestamp())
 }
 
-fn classify(direction: &str, status: &str) -> (EventKind, CashFlow, Lifecycle) {
+pub(crate) fn classify(direction: &str, status: &str) -> (EventKind, CashFlow, Lifecycle) {
     if direction == "不计收支" {
         return (EventKind::Adjustment, CashFlow::Neutral, Lifecycle::Settled);
     }
-    if status == "退款成功" {
-        let flow = if direction == "支出" {
-            CashFlow::Income
-        } else {
-            CashFlow::Expense
-        };
-        (EventKind::Refund, flow, Lifecycle::Settled)
-    } else if status == "交易成功" {
-        let flow = if direction == "支出" {
-            CashFlow::Expense
-        } else if direction == "收入" {
-            CashFlow::Income
-        } else {
-            CashFlow::Pending
-        };
-        (EventKind::Payment, flow, Lifecycle::Settled)
-    } else if status == "交易关闭" {
-        (EventKind::Adjustment, CashFlow::Pending, Lifecycle::Closed)
-    } else if status == "等待确认收货" {
-        (EventKind::Adjustment, CashFlow::Pending, Lifecycle::Pending)
-    } else {
-        (EventKind::Adjustment, CashFlow::Pending, Lifecycle::Unknown)
+    let lifecycle = match status {
+        "交易成功" | "退款成功" => Lifecycle::Settled,
+        "交易关闭" => Lifecycle::Closed,
+        "等待确认收货" => Lifecycle::Pending,
+        _ => Lifecycle::Unknown,
+    };
+    if lifecycle != Lifecycle::Settled {
+        return (EventKind::Adjustment, CashFlow::Pending, lifecycle);
+    }
+    match direction {
+        // The direction column is the cash-flow source of truth. A refunded
+        // outgoing payment and its incoming refund are separate statement rows.
+        "支出" => (EventKind::Payment, CashFlow::Expense, lifecycle),
+        "收入" if status == "退款成功" => (EventKind::Refund, CashFlow::Income, lifecycle),
+        "收入" => (EventKind::Payment, CashFlow::Income, lifecycle),
+        _ => (EventKind::Adjustment, CashFlow::Pending, Lifecycle::Unknown),
     }
 }
 
@@ -238,5 +232,17 @@ mod tests {
         assert_eq!(parsed.cash_flow, crate::events::CashFlow::Expense);
         assert_eq!(parsed.event_kind, crate::events::EventKind::Payment);
         println!("{parsed:?}");
+    }
+
+    #[test]
+    fn preserves_alipay_cash_flow_for_refunds() {
+        assert_eq!(
+            classify("支出", "退款成功"),
+            (EventKind::Payment, CashFlow::Expense, Lifecycle::Settled)
+        );
+        assert_eq!(
+            classify("收入", "退款成功"),
+            (EventKind::Refund, CashFlow::Income, Lifecycle::Settled)
+        );
     }
 }

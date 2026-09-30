@@ -1,8 +1,20 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { BatchRecord, ImportPreview, LedgerEvent, LedgerSummary, PeriodSummary } from "../types";
+import type { BatchRecord, EventFilters, EventPage, ImportPreview, LedgerSummary, PeriodSummary } from "../types";
+
+const DESKTOP_REQUIRED = "当前为浏览器预览模式，请使用 npm run dev 启动 BillHub 桌面端。";
+
+function ensureDesktop(): void {
+  if (!isTauri()) throw new Error(DESKTOP_REQUIRED);
+}
+
+function invokeDesktop<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  ensureDesktop();
+  return invoke<T>(command, args);
+}
 
 export async function pickStatement(): Promise<string | null> {
+  ensureDesktop();
   const selected = await open({
     title: "选择微信或支付宝账单",
     filters: [{ name: "账单文件", extensions: ["xlsx", "csv"] }],
@@ -17,21 +29,21 @@ export async function pickStatement(): Promise<string | null> {
 }
 
 export const previewStatement = (filePath: string) =>
-  invoke<ImportPreview>("api_preview", { filePath });
+  invokeDesktop<ImportPreview>("api_preview", { filePath });
 
 export const importStatement = (filePath: string, replace: boolean) =>
-  invoke<BatchRecord>("api_import", { filePath, replace });
+  invokeDesktop<BatchRecord>("api_import", { filePath, replace });
 
-export const loadBatches = () => invoke<BatchRecord[]>("api_batches");
+export const loadBatches = () => invokeDesktop<BatchRecord[]>("api_batches");
 
-export const loadEvents = (limit = 50, includeNeutral = false, includePending = false) =>
-  invoke<LedgerEvent[]>("api_events", { limit, includeNeutral, includePending });
+export const loadEvents = ({ page, pageSize, provider, cashFlow, lifecycle }: EventFilters) =>
+  invokeDesktop<EventPage>("api_events", { page, pageSize, provider, cashFlow, lifecycle });
 
 export const loadSummary = (includeNeutral = false, includePending = false) =>
-  invoke<LedgerSummary>("api_summary", { includeNeutral, includePending });
+  invokeDesktop<LedgerSummary>("api_summary", { includeNeutral, includePending });
 
-export const loadMonthlySummary = () => invoke<PeriodSummary[]>("api_monthly_summary");
+export const loadMonthlySummary = () => invokeDesktop<PeriodSummary[]>("api_monthly_summary");
 
-export const loadYearlySummary = () => invoke<PeriodSummary[]>("api_yearly_summary");
+export const loadYearlySummary = () => invokeDesktop<PeriodSummary[]>("api_yearly_summary");
 
-export const deleteBatch = (batchId: string) => invoke<boolean>("api_delete", { batchId });
+export const deleteBatch = (batchId: string) => invokeDesktop<boolean>("api_delete", { batchId });

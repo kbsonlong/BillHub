@@ -9,7 +9,7 @@ use crate::{
 
 pub const WECHAT_PARSER_ID: &str = "wechat_xlsx_v1";
 pub const ALIPAY_PARSER_ID: &str = "alipay_csv_v1";
-pub const PARSER_VERSION: &str = "2";
+pub const PARSER_VERSION: &str = "3";
 
 pub trait StatementParser {
     fn provider(&self) -> Provider;

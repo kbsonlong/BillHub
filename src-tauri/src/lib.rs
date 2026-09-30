@@ -77,14 +77,16 @@ fn api_batches(state: State<AppState>) -> ApiResult<Vec<billhub_core::BatchRecor
 
 #[tauri::command]
 fn api_events(
-    limit: usize,
-    include_neutral: bool,
-    include_pending: bool,
+    page: usize,
+    page_size: usize,
+    provider: Option<String>,
+    cash_flow: Option<String>,
+    lifecycle: Option<String>,
     state: State<AppState>,
-) -> ApiResult<Vec<billhub_core::LedgerEventRecord>> {
+) -> ApiResult<billhub_core::EventPage> {
     Ok(state
         .lock()?
-        .events(include_neutral, include_pending, limit)?)
+        .event_page(page, page_size, provider, cash_flow, lifecycle)?)
 }
 
 #[tauri::command]

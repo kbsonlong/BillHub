@@ -102,12 +102,9 @@ fn groups_imported_cash_flow_by_month_and_year() {
     assert!(!yearly.is_empty());
     assert_eq!(
         monthly_income,
-        summary.settled_income_cents - summary.refund_expense_cents
+        summary.settled_income_cents + summary.refund_income_cents
     );
-    assert_eq!(
-        monthly_expense,
-        summary.settled_expense_cents - summary.refund_income_cents
-    );
+    assert_eq!(monthly_expense, summary.settled_expense_cents);
     assert_eq!(yearly_income, monthly_income);
     assert_eq!(yearly_expense, monthly_expense);
     assert!(
@@ -136,16 +133,16 @@ fn period_summaries_use_china_time_and_net_refunds() {
     assert_eq!(monthly[0].net_cents, -10_000);
     assert_eq!(monthly[0].transaction_count, 1);
     assert_eq!(monthly[1].period, "2026-10");
-    assert_eq!(monthly[1].income_cents, 4_000);
-    assert_eq!(monthly[1].expense_cents, -2_000);
-    assert_eq!(monthly[1].net_cents, 6_000);
+    assert_eq!(monthly[1].income_cents, 6_000);
+    assert_eq!(monthly[1].expense_cents, 2_000);
+    assert_eq!(monthly[1].net_cents, 4_000);
     assert_eq!(monthly[1].transaction_count, 3);
 
     let yearly = store.yearly_summary().unwrap();
     assert_eq!(yearly.len(), 1);
-    assert_eq!(yearly[0].income_cents, 4_000);
-    assert_eq!(yearly[0].expense_cents, 8_000);
-    assert_eq!(yearly[0].net_cents, -4_000);
+    assert_eq!(yearly[0].income_cents, 6_000);
+    assert_eq!(yearly[0].expense_cents, 12_000);
+    assert_eq!(yearly[0].net_cents, -6_000);
     assert_eq!(yearly[0].transaction_count, 4);
 
     let refund = store
@@ -174,6 +171,14 @@ fn migrates_v1_timestamps_once() {
         connection
             .execute(
                 "UPDATE ledger_events SET occurred_at = occurred_at + 28800",
+                [],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "UPDATE ledger_events
+                    SET event_kind = 'refund', cash_flow = 'income'
+                  WHERE provider_transaction_id = 'refund-1'",
                 [],
             )
             .unwrap();
@@ -210,7 +215,7 @@ fn migrates_v1_timestamps_once() {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(parser_version, "2");
+        assert_eq!(parser_version, "3");
     }
 
     let store = LedgerStore::open(&database_path).unwrap();
@@ -221,4 +226,6 @@ fn migrates_v1_timestamps_once() {
         .find(|event| event.provider_transaction_id == "refund-1")
         .unwrap();
     assert_eq!(refund.occurred_at, expected);
+    assert_eq!(refund.event_kind, "payment");
+    assert_eq!(refund.cash_flow, "expense");
 }

@@ -58,6 +58,15 @@ pub struct LedgerEventRecord {
     pub raw_json: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct EventPage {
+    pub items: Vec<LedgerEventRecord>,
+    pub total_count: i64,
+    pub page: usize,
+    pub page_size: usize,
+    pub total_pages: usize,
+}
+
 impl LedgerStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         if let Some(parent) = path.as_ref().parent() {
@@ -146,7 +155,69 @@ impl LedgerStore {
             let _ = connection.execute_batch("ROLLBACK");
         }
         result?;
+        Self::migrate_cash_flow_classification(connection)?;
         Ok(())
+    }
+
+    fn migrate_cash_flow_classification(connection: &Connection) -> Result<()> {
+        let rows = {
+            let mut statement = connection.prepare(
+                "SELECT ledger_events.id, ledger_events.provider, ledger_events.raw_json
+                   FROM ledger_events
+                   JOIN import_batches ON import_batches.id = ledger_events.batch_id
+                  WHERE ledger_events.provider IN ('wechat', 'alipay')
+                    AND import_batches.parser_version <> '3'",
+            )?;
+            statement
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?
+        };
+        if rows.is_empty() {
+            return Ok(());
+        }
+
+        let result = (|| -> Result<()> {
+            connection.execute_batch("BEGIN IMMEDIATE;")?;
+            for (id, provider, raw_json) in rows {
+                let fields: std::collections::BTreeMap<String, String> =
+                    serde_json::from_str(&raw_json)?;
+                let direction = fields.get("收/支").map(String::as_str).unwrap_or("");
+                let status = match provider.as_str() {
+                    "wechat" => fields.get("当前状态").map(String::as_str).unwrap_or(""),
+                    "alipay" => fields.get("交易状态").map(String::as_str).unwrap_or(""),
+                    _ => continue,
+                };
+                let (kind, flow, lifecycle) = match provider.as_str() {
+                    "wechat" => crate::parsers::wechat::classify(direction, status),
+                    "alipay" => crate::parsers::alipay::classify(direction, status),
+                    _ => continue,
+                };
+                connection.execute(
+                    "UPDATE ledger_events
+                        SET event_kind = ?1, cash_flow = ?2, lifecycle = ?3
+                      WHERE id = ?4",
+                    params![kind.as_str(), flow.as_str(), lifecycle.as_str(), id],
+                )?;
+            }
+            connection.execute(
+                "UPDATE import_batches
+                    SET parser_version = '3'
+                  WHERE provider IN ('wechat', 'alipay') AND parser_version <> '3'",
+                [],
+            )?;
+            connection.execute_batch("COMMIT;")?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = connection.execute_batch("ROLLBACK");
+        }
+        result
     }
 
     pub fn file_status(&self, sha256: &str) -> Result<Option<BatchRecord>> {
@@ -328,6 +399,65 @@ impl LedgerStore {
         Ok(records)
     }
 
+    pub fn event_page(
+        &self,
+        page: usize,
+        page_size: usize,
+        provider: Option<String>,
+        cash_flow: Option<String>,
+        lifecycle: Option<String>,
+    ) -> Result<EventPage> {
+        let page = page.max(1);
+        let page_size = page_size.clamp(1, 100);
+        let provider = provider.filter(|value| matches!(value.as_str(), "wechat" | "alipay"));
+        let cash_flow = cash_flow.filter(|value| {
+            matches!(value.as_str(), "expense" | "income" | "neutral" | "pending")
+        });
+        let lifecycle = lifecycle.filter(|value| {
+            matches!(
+                value.as_str(),
+                "settled" | "pending" | "closed" | "reversed" | "unknown"
+            )
+        });
+        let filters = "(?1 IS NULL OR provider = ?1)
+                       AND (?2 IS NULL OR cash_flow = ?2)
+                       AND (?3 IS NULL OR lifecycle = ?3)";
+        let total_count = self.connection.query_row(
+            &format!("SELECT COUNT(*) FROM ledger_events WHERE {filters}"),
+            params![provider.as_deref(), cash_flow.as_deref(), lifecycle.as_deref()],
+            |row| row.get(0),
+        )?;
+        let offset = ((page - 1) * page_size) as i64;
+        let sql = format!(
+            "SELECT id,batch_id,provider,occurred_at,event_kind,cash_flow,lifecycle,amount_cents,counterparty,description,raw_category,funding_account_id,provider_transaction_id,merchant_order_id,raw_json
+               FROM ledger_events
+              WHERE {filters}
+              ORDER BY occurred_at DESC
+              LIMIT ?4 OFFSET ?5"
+        );
+        let mut statement = self.connection.prepare(&sql)?;
+        let items = statement
+            .query_map(
+                params![
+                    provider.as_deref(),
+                    cash_flow.as_deref(),
+                    lifecycle.as_deref(),
+                    page_size as i64,
+                    offset
+                ],
+                map_event,
+            )?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let total_pages = ((total_count as usize) + page_size - 1) / page_size;
+        Ok(EventPage {
+            items,
+            total_count,
+            page,
+            page_size,
+            total_pages,
+        })
+    }
+
     pub fn summary(&self, include_neutral: bool, include_pending: bool) -> Result<LedgerSummary> {
         let mut filter_clauses = Vec::new();
         if !include_neutral {
@@ -355,7 +485,7 @@ impl LedgerStore {
             ))
         })?;
         for row in rows {
-            let (kind, flow, lifecycle, count, amount) = row?;
+            let (kind, flow, _, _, amount) = row?;
             match (kind.as_str(), flow.as_str()) {
                 ("payment", "expense") => summary.settled_expense_cents += amount.round() as i64,
                 ("payment", "income") => summary.settled_income_cents += amount.round() as i64,
@@ -363,13 +493,17 @@ impl LedgerStore {
                 ("refund", "expense") => summary.refund_expense_cents += amount.round() as i64,
                 _ => {}
             }
-            if lifecycle == "pending" || lifecycle == "unknown" {
-                summary.pending_count += count;
-            }
-            if flow == "neutral" {
-                summary.neutral_count += count;
-            }
         }
+        let (pending_count, neutral_count) = self.connection.query_row(
+            "SELECT
+                SUM(CASE WHEN lifecycle IN ('pending', 'unknown') THEN 1 ELSE 0 END),
+                SUM(CASE WHEN cash_flow = 'neutral' THEN 1 ELSE 0 END)
+             FROM ledger_events",
+            [],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+        )?;
+        summary.pending_count = pending_count;
+        summary.neutral_count = neutral_count;
         Ok(summary)
     }
 

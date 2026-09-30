@@ -130,24 +130,35 @@ impl StatementParser for WechatXlsxV1 {
     }
 }
 
-fn classify(direction: &str, status: &str) -> (EventKind, CashFlow, Lifecycle) {
-    if status.contains("退款") {
-        let flow = if direction == "支出" {
-            CashFlow::Income
-        } else {
-            CashFlow::Expense
-        };
-        (EventKind::Refund, flow, Lifecycle::Settled)
-    } else if status == "支付成功" {
-        let flow = if direction == "支出" {
-            CashFlow::Expense
-        } else {
-            CashFlow::Income
-        };
-        (EventKind::Payment, flow, Lifecycle::Settled)
+pub(crate) fn classify(direction: &str, status: &str) -> (EventKind, CashFlow, Lifecycle) {
+    let lifecycle = if is_settled(status) {
+        Lifecycle::Settled
+    } else if status.contains("关闭") {
+        Lifecycle::Closed
+    } else if status.contains("待") {
+        Lifecycle::Pending
     } else {
-        (EventKind::Adjustment, CashFlow::Pending, Lifecycle::Unknown)
+        Lifecycle::Unknown
+    };
+    if lifecycle != Lifecycle::Settled {
+        return (EventKind::Adjustment, CashFlow::Pending, lifecycle);
     }
+
+    match direction {
+        // A WeChat expense row remains the original outgoing payment even when
+        // its status mentions a later refund. The refund is a separate income row.
+        "支出" => (EventKind::Payment, CashFlow::Expense, lifecycle),
+        "收入" if status.contains("退款") => (EventKind::Refund, CashFlow::Income, lifecycle),
+        "收入" => (EventKind::Payment, CashFlow::Income, lifecycle),
+        _ => (EventKind::Transfer, CashFlow::Neutral, lifecycle),
+    }
+}
+
+fn is_settled(status: &str) -> bool {
+    matches!(
+        status,
+        "支付成功" | "对方已收钱" | "已转账" | "已到账" | "已存入零钱" | "已收钱" | "提现已到账"
+    ) || status.contains("退款")
 }
 
 pub fn parse_datetime(value: &str) -> Option<i64> {
@@ -198,14 +209,22 @@ mod tests {
     }
 
     #[test]
-    fn classifies_partial_refunds_as_independent_events() {
+    fn preserves_wechat_cash_flow_and_marks_refund_income() {
         assert_eq!(
             classify("支出", "已退款(¥1.11)"),
-            (EventKind::Refund, CashFlow::Income, Lifecycle::Settled)
+            (EventKind::Payment, CashFlow::Expense, Lifecycle::Settled)
         );
         assert_eq!(
             classify("收入", "已全额退款"),
-            (EventKind::Refund, CashFlow::Expense, Lifecycle::Settled)
+            (EventKind::Refund, CashFlow::Income, Lifecycle::Settled)
+        );
+        assert_eq!(
+            classify("支出", "对方已收钱"),
+            (EventKind::Payment, CashFlow::Expense, Lifecycle::Settled)
+        );
+        assert_eq!(
+            classify("/", "提现已到账"),
+            (EventKind::Transfer, CashFlow::Neutral, Lifecycle::Settled)
         );
     }
 }

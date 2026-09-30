@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port 5173 --strictPort",
+    "dev": "tauri dev",
+    "web:dev": "vite --port 1420 --strictPort",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 5173 --strictPort",
     "tauri": "tauri"

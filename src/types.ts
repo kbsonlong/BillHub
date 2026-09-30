@@ -44,6 +44,22 @@ export type LedgerEvent = {
   raw_json: string;
 };
 
+export type EventPage = {
+  items: LedgerEvent[];
+  total_count: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+};
+
+export type EventFilters = {
+  page: number;
+  pageSize: number;
+  provider?: string;
+  cashFlow?: string;
+  lifecycle?: string;
+};
+
 export type LedgerSummary = {
   settled_expense_cents: number;
   settled_income_cents: number;

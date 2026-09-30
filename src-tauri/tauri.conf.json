@@ -5,9 +5,9 @@
   "identifier": "app.billhub.desktop",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run web:dev",
+    "beforeBuildCommand": "npm run build"
   },
   "app": {
     "windows": [
