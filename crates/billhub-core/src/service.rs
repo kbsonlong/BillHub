@@ -1,5 +1,6 @@
 use crate::detect::{ImportFile, PreviewSummary, detect_import_file};
 use crate::{LedgerStore, Result, db::BatchRecord};
+use serde::Serialize;
 
 #[derive(Debug, Clone, Default)]
 pub struct ImportOptions {
@@ -7,7 +8,7 @@ pub struct ImportOptions {
     pub source_path: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ImportPreview {
     pub summary: PreviewSummary,
     pub file_sha256: String,

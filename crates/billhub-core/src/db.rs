@@ -9,7 +9,7 @@ pub struct LedgerStore {
     connection: Connection,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct BatchRecord {
     pub id: String,
     pub provider: String,

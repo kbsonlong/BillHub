@@ -1,0 +1,161 @@
+use billhub_core::{ImportFile, ImportOptions, LedgerStore, preview};
+use serde::Serialize;
+use std::path::PathBuf;
+use std::sync::Mutex;
+use tauri::{AppHandle, Manager, State};
+use tauri_plugin_dialog::{DialogExt, FilePath};
+
+#[derive(Serialize)]
+struct ApiError {
+    code: String,
+    message: String,
+}
+
+impl ApiError {
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            code: "IMPORT_FAILED".into(),
+            message: message.into(),
+        }
+    }
+}
+
+impl<T> From<T> for ApiError
+where
+    T: std::fmt::Display,
+{
+    fn from(value: T) -> Self {
+        Self::new(value.to_string())
+    }
+}
+
+type ApiResult<T> = Result<T, ApiError>;
+
+struct AppState {
+    #[allow(dead_code)]
+    database_path: PathBuf,
+    store: Mutex<LedgerStore>,
+}
+
+impl AppState {
+    fn lock(&self) -> ApiResult<std::sync::MutexGuard<'_, LedgerStore>> {
+        self.store.lock().map_err(|_| ApiError::new("数据库忙"))
+    }
+}
+
+#[tauri::command]
+fn api_preview(
+    file_path: String,
+    state: State<AppState>,
+) -> ApiResult<billhub_core::ImportPreview> {
+    let file = ImportFile::from_path(&file_path)?;
+    Ok(preview(&*state.lock()?, &file)?)
+}
+
+#[tauri::command]
+fn api_import(
+    file_path: String,
+    replace: bool,
+    state: State<AppState>,
+) -> ApiResult<billhub_core::BatchRecord> {
+    let file = ImportFile::from_path(&file_path)?;
+    let result = billhub_core::import(
+        &*state.lock()?,
+        &file,
+        ImportOptions {
+            replace,
+            source_path: Some(file.file_name.clone()),
+        },
+    )?;
+    Ok(result)
+}
+
+#[tauri::command]
+fn api_batches(state: State<AppState>) -> ApiResult<Vec<billhub_core::BatchRecord>> {
+    Ok(state.lock()?.batches()?)
+}
+
+#[tauri::command]
+fn api_events(
+    limit: usize,
+    include_neutral: bool,
+    include_pending: bool,
+    state: State<AppState>,
+) -> ApiResult<Vec<billhub_core::LedgerEventRecord>> {
+    Ok(state
+        .lock()?
+        .events(include_neutral, include_pending, limit)?)
+}
+
+#[tauri::command]
+fn api_summary(
+    include_neutral: bool,
+    include_pending: bool,
+    state: State<AppState>,
+) -> ApiResult<billhub_core::LedgerSummary> {
+    Ok(state.lock()?.summary(include_neutral, include_pending)?)
+}
+
+#[tauri::command]
+fn api_monthly_summary(state: State<AppState>) -> ApiResult<Vec<billhub_core::PeriodSummary>> {
+    Ok(state.lock()?.monthly_summary()?)
+}
+
+#[tauri::command]
+fn api_yearly_summary(state: State<AppState>) -> ApiResult<Vec<billhub_core::PeriodSummary>> {
+    Ok(state.lock()?.yearly_summary()?)
+}
+
+#[tauri::command]
+fn api_delete(batch_id: String, state: State<AppState>) -> ApiResult<bool> {
+    Ok(state.lock()?.delete_batch(&batch_id)?)
+}
+
+#[tauri::command]
+async fn api_pick_statement(app: AppHandle) -> ApiResult<Option<String>> {
+    let receiver = app
+        .dialog()
+        .file()
+        .add_filter("账单文件", &["xlsx", "csv"])
+        .blocking_pick_file();
+    Ok(match receiver {
+        Some(FilePath::Path(path)) => Some(path.to_string_lossy().into_owned()),
+        Some(FilePath::Url(url)) => url.to_string().into(),
+        None => None,
+    })
+}
+
+#[tauri::command]
+fn api_database_path(state: State<AppState>) -> String {
+    state.database_path.to_string_lossy().into_owned()
+}
+
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let dir = app.path().app_local_data_dir()?.join("ledger");
+            std::fs::create_dir_all(&dir)?;
+            let database_path = dir.join("billhub.sqlite3");
+            let store = LedgerStore::open(&database_path)?;
+            app.manage(AppState {
+                database_path,
+                store: Mutex::new(store),
+            });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            api_preview,
+            api_import,
+            api_batches,
+            api_events,
+            api_summary,
+            api_monthly_summary,
+            api_yearly_summary,
+            api_delete,
+            api_pick_statement,
+            api_database_path
+        ])
+        .run(tauri::generate_context!())
+        .expect("failed to run BillHub");
+}
