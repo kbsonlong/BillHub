@@ -27,6 +27,7 @@ pub struct LedgerSummary {
     pub refund_income_cents: i64,
     pub refund_expense_cents: i64,
     pub pending_count: i64,
+    pub unknown_count: i64,
     pub neutral_count: i64,
 }
 
@@ -407,11 +408,26 @@ impl LedgerStore {
         cash_flow: Option<String>,
         lifecycle: Option<String>,
     ) -> Result<EventPage> {
+        self.event_page_filtered(page, page_size, provider, cash_flow, lifecycle, None)
+    }
+
+    pub fn event_page_filtered(
+        &self,
+        page: usize,
+        page_size: usize,
+        provider: Option<String>,
+        cash_flow: Option<String>,
+        lifecycle: Option<String>,
+        period: Option<String>,
+    ) -> Result<EventPage> {
         let page = page.max(1);
         let page_size = page_size.clamp(1, 100);
         let provider = provider.filter(|value| matches!(value.as_str(), "wechat" | "alipay"));
         let cash_flow = cash_flow.filter(|value| {
-            matches!(value.as_str(), "expense" | "income" | "neutral" | "pending")
+            matches!(
+                value.as_str(),
+                "expense" | "income" | "refund" | "neutral" | "pending"
+            )
         });
         let lifecycle = lifecycle.filter(|value| {
             matches!(
@@ -419,12 +435,24 @@ impl LedgerStore {
                 "settled" | "pending" | "closed" | "reversed" | "unknown"
             )
         });
+        let period = period.filter(|value| is_period(value));
         let filters = "(?1 IS NULL OR provider = ?1)
-                       AND (?2 IS NULL OR cash_flow = ?2)
-                       AND (?3 IS NULL OR lifecycle = ?3)";
+                       AND (?2 IS NULL
+                            OR (?2 = 'expense' AND event_kind = 'payment' AND cash_flow = 'expense')
+                            OR (?2 = 'income' AND event_kind = 'payment' AND cash_flow = 'income')
+                            OR (?2 = 'refund' AND event_kind = 'refund')
+                            OR (?2 = 'neutral' AND event_kind != 'refund' AND cash_flow = 'neutral')
+                            OR (?2 = 'pending' AND cash_flow = 'pending'))
+                       AND (?3 IS NULL OR lifecycle = ?3)
+                       AND (?4 IS NULL OR substr(strftime('%Y-%m', occurred_at, 'unixepoch', '+8 hours'), 1, length(?4)) = ?4)";
         let total_count = self.connection.query_row(
             &format!("SELECT COUNT(*) FROM ledger_events WHERE {filters}"),
-            params![provider.as_deref(), cash_flow.as_deref(), lifecycle.as_deref()],
+            params![
+                provider.as_deref(),
+                cash_flow.as_deref(),
+                lifecycle.as_deref(),
+                period.as_deref()
+            ],
             |row| row.get(0),
         )?;
         let offset = ((page - 1) * page_size) as i64;
@@ -433,7 +461,7 @@ impl LedgerStore {
                FROM ledger_events
               WHERE {filters}
               ORDER BY occurred_at DESC
-              LIMIT ?4 OFFSET ?5"
+              LIMIT ?5 OFFSET ?6"
         );
         let mut statement = self.connection.prepare(&sql)?;
         let items = statement
@@ -442,6 +470,7 @@ impl LedgerStore {
                     provider.as_deref(),
                     cash_flow.as_deref(),
                     lifecycle.as_deref(),
+                    period.as_deref(),
                     page_size as i64,
                     offset
                 ],
@@ -494,17 +523,102 @@ impl LedgerStore {
                 _ => {}
             }
         }
-        let (pending_count, neutral_count) = self.connection.query_row(
+        let (pending_count, unknown_count, neutral_count) = self.connection.query_row(
             "SELECT
-                SUM(CASE WHEN lifecycle IN ('pending', 'unknown') THEN 1 ELSE 0 END),
-                SUM(CASE WHEN cash_flow = 'neutral' THEN 1 ELSE 0 END)
+                COALESCE(SUM(CASE WHEN lifecycle = 'pending' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN lifecycle = 'unknown' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN cash_flow = 'neutral' THEN 1 ELSE 0 END), 0)
              FROM ledger_events",
             [],
-            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            },
         )?;
         summary.pending_count = pending_count;
+        summary.unknown_count = unknown_count;
         summary.neutral_count = neutral_count;
         Ok(summary)
+    }
+
+    pub fn update_event_classification(
+        &self,
+        event_id: &str,
+        event_kind: &str,
+        lifecycle: &str,
+    ) -> Result<bool> {
+        Ok(self.update_events_classification(
+            &[event_id.to_owned()],
+            Some(event_kind),
+            Some(lifecycle),
+        )? > 0)
+    }
+
+    pub fn update_events_classification(
+        &self,
+        event_ids: &[String],
+        event_kind: Option<&str>,
+        lifecycle: Option<&str>,
+    ) -> Result<usize> {
+        if event_kind.is_none() && lifecycle.is_none() {
+            return Err(Error::NoEventClassificationChange);
+        }
+        if event_kind.is_some_and(|value| !is_event_kind(value))
+            || lifecycle.is_some_and(|value| !is_lifecycle(value))
+        {
+            return Err(Error::InvalidEventClassification);
+        }
+        if event_ids.is_empty() {
+            return Ok(0);
+        }
+
+        self.connection.execute_batch("BEGIN IMMEDIATE;")?;
+        let result = (|| -> Result<usize> {
+            let mut updated_count = 0;
+            for event_id in event_ids {
+                let event = self
+                    .connection
+                    .query_row(
+                        "SELECT event_kind, lifecycle, raw_json FROM ledger_events WHERE id = ?1",
+                        params![event_id],
+                        |row| {
+                            Ok((
+                                row.get::<_, String>(0)?,
+                                row.get::<_, String>(1)?,
+                                row.get::<_, String>(2)?,
+                            ))
+                        },
+                    )
+                    .optional()?;
+                let Some((current_kind, current_lifecycle, raw_json)) = event else {
+                    continue;
+                };
+                let event_kind = event_kind.unwrap_or(&current_kind);
+                let lifecycle = lifecycle.unwrap_or(&current_lifecycle);
+                let fields: std::collections::BTreeMap<String, String> =
+                    serde_json::from_str(&raw_json)?;
+                let cash_flow = manual_cash_flow(
+                    event_kind,
+                    lifecycle,
+                    fields.get("收/支").map(String::as_str),
+                );
+                updated_count += self.connection.execute(
+                    "UPDATE ledger_events
+                        SET event_kind = ?1, cash_flow = ?2, lifecycle = ?3
+                      WHERE id = ?4",
+                    params![event_kind, cash_flow, lifecycle, event_id],
+                )?;
+            }
+            self.connection.execute_batch("COMMIT;")?;
+            Ok(updated_count)
+        })();
+        if result.is_err() {
+            let _ = self.connection.execute_batch("ROLLBACK;");
+        }
+        result
     }
 
     pub fn monthly_summary(&self) -> Result<Vec<PeriodSummary>> {
@@ -549,6 +663,51 @@ impl LedgerStore {
             })
         })?;
         Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+    }
+}
+
+fn is_event_kind(value: &str) -> bool {
+    matches!(
+        value,
+        "payment" | "refund" | "transfer" | "top_up" | "withdrawal" | "adjustment"
+    )
+}
+
+fn is_lifecycle(value: &str) -> bool {
+    matches!(
+        value,
+        "settled" | "pending" | "closed" | "reversed" | "unknown"
+    )
+}
+
+fn is_period(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() == 4 {
+        return bytes.iter().all(u8::is_ascii_digit);
+    }
+    if bytes.len() != 7 || bytes[4] != b'-' || !bytes[..4].iter().all(u8::is_ascii_digit) {
+        return false;
+    }
+    let month = std::str::from_utf8(&bytes[5..])
+        .ok()
+        .and_then(|value| value.parse::<u8>().ok());
+    matches!(month, Some(1..=12))
+}
+
+fn manual_cash_flow(event_kind: &str, lifecycle: &str, direction: Option<&str>) -> &'static str {
+    if lifecycle != "settled" {
+        return "pending";
+    }
+    if matches!(
+        event_kind,
+        "transfer" | "top_up" | "withdrawal" | "adjustment"
+    ) {
+        return "neutral";
+    }
+    match direction {
+        Some("支出") => "expense",
+        Some("收入") => "income",
+        _ => "neutral",
     }
 }
 

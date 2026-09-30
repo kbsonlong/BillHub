@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BillHub UI 设计规范</title>
+<style>
+  :root {
+    --paper: #f7f3ec;
+    --surface: #fffdf8;
+    --ink: #20261f;
+    --muted: #71796e;
+    --border: #e0d8c8;
+    --green: #226b4f;
+    --green-soft: #e6f2ec;
+    --amber: #9a6200;
+    --amber-soft: #fff1d2;
+    --red: #a63232;
+    --red-soft: #f8e3e3;
+    --blue: #378ADD;
+    --blue-soft: #e6f1fb;
+    --shadow: 0 18px 42px rgba(48, 42, 31, .10);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 18px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font: 14px/1.7 "Avenir Next", "PingFang SC", "Noto Sans SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .doc { max-width: 960px; margin: 0 auto; padding: 48px 32px 80px; }
+
+  /* Cover */
+  .cover {
+    text-align: center;
+    padding: 64px 32px 48px;
+    background: var(--surface);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    margin-bottom: 40px;
+  }
+  .cover h1 {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -.03em;
+    margin-bottom: 12px;
+    color: var(--green);
+  }
+  .cover .subtitle { font-size: 16px; color: var(--muted); margin-bottom: 8px; }
+  .cover .meta { font-size: 13px; color: var(--muted); }
+  .cover .badge-row {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+  .cover .badge {
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .cover .badge.green { background: var(--green-soft); color: var(--green); }
+  .cover .badge.amber { background: var(--amber-soft); color: var(--amber); }
+  .cover .badge.red { background: var(--red-soft); color: var(--red); }
+
+  /* Section */
+  section {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 32px;
+    margin-bottom: 24px;
+  }
+  section h2 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    margin-bottom: 8px;
+    color: var(--ink);
+  }
+  section h2 .num {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    text-align: center;
+    background: var(--green);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 15px;
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+  section .desc { color: var(--muted); margin-bottom: 24px; font-size: 14px; }
+  section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 24px 0 12px;
+    color: var(--ink);
+  }
+  section p { margin-bottom: 12px; color: var(--ink); }
+  section ul, section ol { margin: 8px 0 16px 20px; }
+  section li { margin-bottom: 6px; }
+
+  /* Color palette */
+  .palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+  .color-card {
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .color-swatch { height: 72px; display: flex; align-items: flex-end; padding: 8px 12px; }
+  .color-swatch span { font-size: 11px; font-family: ui-monospace, monospace; opacity: .8; }
+  .color-info { padding: 10px 12px; }
+  .color-info strong { display: block; font-size: 13px; margin-bottom: 2px; }
+  .color-info small { color: var(--muted); font-size: 11px; }
+
+  /* Typography */
+  .type-row {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .type-row:last-child { border-bottom: 0; }
+  .type-label { width: 100px; flex-shrink: 0; color: var(--muted); font-size: 12px; }
+  .type-sample { flex: 1; }
+
+  /* Component showcase */
+  .component-grid { display: grid; gap: 20px; }
+  .component-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    border-radius: var(--radius-sm);
+    height: 36px;
+    padding: 0 16px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    transition: all .15s;
+  }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
+  .btn.primary:hover { opacity: .9; }
+  .btn.danger { background: var(--red); border-color: var(--red); color: #fff; }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--green); }
+  .btn.sm { height: 28px; padding: 0 10px; font-size: 12px; }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--paper);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .chip.active { background: var(--green); border-color: var(--green); color: #fff; }
+  .chip.wechat { background: var(--green-soft); color: var(--green); border-color: transparent; }
+  .chip.alipay { background: var(--blue-soft); color: #0C447C; border-color: transparent; }
+
+  .badge-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .badge-pill.settled { background: var(--green-soft); color: var(--green); }
+  .badge-pill.pending { background: var(--amber-soft); color: var(--amber); }
+  .badge-pill.unknown { background: #ece7db; color: var(--muted); }
+
+  .stat-card {
+    background: var(--paper);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    min-width: 160px;
+  }
+  .stat-card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .stat-card .value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat-card .trend { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .stat-card .trend.up { color: var(--green); }
+  .stat-card .trend.down { color: var(--red); }
+
+  /* Page mockup cards */
+  .page-mockup {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin: 16px 0;
+  }
+  .page-mockup-header {
+    background: #263029;
+    color: #fff;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .page-mockup-header .dots { display: flex; gap: 6px; }
+  .page-mockup-header .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .page-mockup-header .dot.r { background: #ff5f57; }
+  .page-mockup-header .dot.y { background: #febc2e; }
+  .page-mockup-header .dot.g { background: #28c840; }
+  .page-mockup-header .title { font-size: 13px; color: #a4b3a7; margin-left: 8px; }
+  .page-mockup-body { padding: 0; background: var(--paper); }
+
+  /* Design principle cards */
+  .principle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .principle-card {
+    background: var(--paper);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    text-align: center;
+  }
+  .principle-card .icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    margin: 0 auto 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .principle-card .icon.clear { background: var(--blue-soft); color: var(--blue); }
+  .principle-card .icon.warm { background: var(--amber-soft); color: var(--amber); }
+  .principle-card .icon.control { background: var(--green-soft); color: var(--green); }
+  .principle-card h4 { font-size: 15px; margin-bottom: 6px; }
+  .principle-card p { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  /* Table */
+  .spec-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  .spec-table th, .spec-table td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .spec-table th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .spec-table td code { font-family: ui-monospace, monospace; font-size: 12px; background: var(--paper); padding: 2px 6px; border-radius: 4px; }
+
+  /* Note */
+  .note {
+    background: var(--amber-soft);
+    border-left: 3px solid var(--amber);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 13px;
+    color: var(--amber);
+  }
+  .note.green { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+
+  /* Layout diagram */
+  .layout-diagram {
+    display: grid;
+    grid-template-columns: 225px 1fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    min-height: 400px;
+  }
+  .layout-sidebar {
+    background: #263029;
+    padding: 24px 20px;
+    color: #fff;
+  }
+  .layout-sidebar .brand { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+  .layout-sidebar .brand-sub { font-size: 11px; color: #a4b3a7; margin-bottom: 28px; }
+  .layout-sidebar nav { display: flex; flex-direction: column; gap: 8px; }
+  .layout-sidebar nav a {
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: #dbe5dc;
+    text-decoration: none;
+    transition: all .15s;
+  }
+  .layout-sidebar nav a.active {
+    background: var(--amber-soft);
+    color: var(--amber);
+    font-weight: 600;
+  }
+  .layout-sidebar nav a.active.green-bg {
+    background: #e8f3ed;
+    color: #1c4c39;
+  }
+  .layout-sidebar .privacy { margin-top: auto; font-size: 11px; color: #a4b3a7; }
+  .layout-content { padding: 24px; }
+
+  /* Responsive */
+  .responsive-note { font-size: 13px; color: var(--muted); margin-top: 8px; }
+
+  @media (max-width: 768px) {
+    .principle-grid { grid-template-columns: 1fr; }
+    .layout-diagram { grid-template-columns: 1fr; }
+    .layout-sidebar { flex-direction: row; }
+  }
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <!-- Cover -->
+  <div class="cover">
+    <h1>BillHub UI 设计规范</h1>
+    <p class="subtitle">本地优先的个人记账应用界面设计方案</p>
+    <p class="meta">版本 2.0 · 2026年9月 · 适配 Tauri 桌面端 (1180×780)</p>
+    <div class="badge-row">
+      <span class="badge green">绿色 = 收入</span>
+      <span class="badge red">红色 = 支出</span>
+      <span class="badge amber">暖色纸感主题</span>
+    </div>
+  </div>
+
+  <!-- 1. Design Philosophy -->
+  <section>
+    <h2><span class="num">1</span>设计哲学</h2>
+    <p class="desc">围绕中国用户记账习惯，建立"清晰、温暖、可控"三大设计原则</p>
+
+    <div class="principle-grid">
+      <div class="principle-card">
+        <div class="icon clear">清</div>
+        <h4>清晰 Clarity</h4>
+        <p>信息层级一目了然。用户打开应用即可看到财务全貌：本月收入、支出、结余，无需翻找。关键数字使用大字号 + 等宽数字字体（tabular-nums），金额对齐便于扫读。</p>
+      </div>
+      <div class="principle-card">
+        <div class="icon warm">暖</div>
+        <h4>温暖 Warmth</h4>
+        <p>暖色纸感背景（#f7f3ec）建立信任感与亲和力，区别于冷冰冰的金融工具。深绿色侧边栏营造稳重氛围，搭配圆润的圆角（12-18px）和柔和阴影，让记账变得轻松愉悦。</p>
+      </div>
+      <div class="principle-card">
+        <div class="icon control">控</div>
+        <h4>可控 Control</h4>
+        <p>数据操作可追溯。导入前预览、批次可撤销、流水可编辑可批量修改。所有破坏性操作需二次确认，让用户始终感到对财务数据拥有完全控制权。本地优先，隐私无忧。</p>
+      </div>
+    </div>
+
+    <div class="note green">
+      <strong>核心洞察：</strong>中国用户记账的核心习惯是"先看总览，再查细节"。因此新增「仪表盘」作为默认首页，打开即见月度财务概况、支出分类和消费日历，符合"打开→扫一眼→放心"的心理路径。
+    </div>
+  </section>
+
+  <!-- 2. Color System -->
+  <section>
+    <h2><span class="num">2</span>色彩系统</h2>
+    <p class="desc">延续现有暖色纸感主题，细化语义色彩层级</p>
+
+    <h3>核心色彩</h3>
+    <div class="palette">
+      <div class="color-card">
+        <div class="color-swatch" style="background: #f7f3ec;"><span>#f7f3ec</span></div>
+        <div class="color-info"><strong>Paper</strong><small>页面背景 · 暖米色</small></div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #fffdf8;"><span>#fffdf8</span></div>
+        <div class="color-info"><strong>Surface</strong><small>卡片表面 · 奶白</small></div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #263029; color: #fff;"><span>#263029</span></div>
+        <div class="color-info"><strong>Sidebar</strong><small>侧边栏 · 深森林绿</small></div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #20261f; color: #fff;"><span>#20261f</span></div>
+        <div class="color-info"><strong>Ink</strong><small>主文字 · 深墨</small></div>
+      </div>
+    </div>
+
+    <h3>语义色彩（遵循中国记账习惯）</h3>
+    <div class="palette">
+      <div class="color-card">
+        <div class="color-swatch" style="background: #226b4f; color: #fff;"><span>#226b4f</span></div>
+        <div class="color-info"><strong>Green · 收入</strong><small>正数 / 收入 / 结余</small></div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #a63232; color: #fff;"><span>#a63232</span></div>
+        <div class="color-info"><strong>Red · 支出</strong><small>负数 / 支出 / 警告</small></div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #9a6200; color: #fff;"><span>#9a6200</span></div>
+        <div class="color-info"><strong>Amber · 待处理</strong><small>待确认 / 提醒</small></div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #378ADD; color: #fff;"><span>#378ADD</span></div>
+        <div class="color-info"><strong>Blue · 操作</strong><small>链接 / 可点击文字</small></div>
+      </div>
+    </div>
+
+    <h3>柔和背景色（用于标签、徽章、卡片底色）</h3>
+    <div class="palette">
+      <div class="color-card">
+        <div class="color-swatch" style="background: #e6f2ec;"><span>#e6f2ec</span></div>
+        <div class="color-info"><strong>Green-soft</strong><small>收入徽章 / 微信标签</small></div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #f8e3e3;"><span>#f8e3e3</span></div>
+        <div class="color-info"><strong>Red-soft</strong><small>支出徽章 / 错误提示</small></div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #fff1d2;"><span>#fff1d2</span></div>
+        <div class="color-info"><strong>Amber-soft</strong><small>待处理徽章 / 警告</small></div>
+      </div>
+      <div class="color-card">
+        <div class="color-swatch" style="background: #e6f1fb;"><span>#e6f1fb</span></div>
+        <div class="color-info"><strong>Blue-soft</strong><small>支付宝标签 / 信息提示</small></div>
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>色彩约定：</strong>绿色代表收入（涨），红色代表支出（跌），这是中国金融市场的通用约定，与欧美市场相反。全应用严格遵循此规则，确保用户直觉一致。
+    </div>
+  </section>
+
+  <!-- 3. Typography -->
+  <section>
+    <h2><span class="num">3</span>字体规范</h2>
+    <p class="desc">清晰的层级关系，等宽数字保证金额对齐</p>
+
+    <div class="type-row">
+      <div class="type-label">H1 页面标题</div>
+      <div class="type-sample" style="font-size: 32px; font-weight: 800; letter-spacing: -.03em;">仪表盘</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">H2 区块标题</div>
+      <div class="type-sample" style="font-size: 18px; font-weight: 700;">支出分类</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">H3 子标题</div>
+      <div class="type-sample" style="font-size: 15px; font-weight: 600;">本月收入</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">数字-大</div>
+      <div class="type-sample" style="font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--green);">¥18,560.00</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">数字-中</div>
+      <div class="type-sample" style="font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--red);">-¥9,420.50</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">正文</div>
+      <div class="type-sample" style="font-size: 14px;">美团外卖 · 今天 12:30 · 零钱</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">辅助文字</div>
+      <div class="type-sample" style="font-size: 12px; color: var(--muted);">较上月 +12.3%</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">等宽</div>
+      <div class="type-sample" style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted);">a3f5b8c9d2e1</div>
+    </div>
+
+    <h3>字体族</h3>
+    <table class="spec-table">
+      <thead><tr><th>用途</th><th>字体族</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>主字体</td><td><code>"Avenir Next", "PingFang SC", "Noto Sans SC", sans-serif</code></td><td>系统字体优先，中英文兼顾</td></tr>
+        <tr><td>等宽字体</td><td><code>ui-monospace, "SF Mono", monospace</code></td><td>用于 SHA256、文件路径等技术信息</td></tr>
+        <tr><td>数字特性</td><td><code>font-variant-numeric: tabular-nums</code></td><td>所有金额使用等宽数字，保证列对齐</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 4. Layout -->
+  <section>
+    <h2><span class="num">4</span>布局架构</h2>
+    <p class="desc">侧边栏 + 主内容区的经典双栏布局，适配桌面端</p>
+
+    <h3>整体框架</h3>
+    <div class="layout-diagram">
+      <div class="layout-sidebar" style="display: flex; flex-direction: column;">
+        <div class="brand">BillHub</div>
+        <div class="brand-sub">本地账单管理</div>
+        <nav>
+          <a class="active green-bg">仪表盘</a>
+          <a>导入中心</a>
+          <a>流水明细</a>
+          <a>收支分析</a>
+        </nav>
+        <div style="flex: 1;"></div>
+        <div class="privacy">本地优先<br>不上传账单</div>
+      </div>
+      <div class="layout-content">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px;">
+          <div>
+            <div style="font-size: 28px; font-weight: 800; letter-spacing: -.03em;">仪表盘</div>
+            <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">2026年9月 · 财务总览</div>
+          </div>
+          <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 14px; font-size: 13px; color: var(--muted);">9月 ▾</div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 14px;">
+          <div class="stat-card">
+            <div class="label">本月收入</div>
+            <div class="value" style="color: var(--green);">¥18,560.00</div>
+            <div class="trend up">▲ 较上月 +12.3%</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">本月支出</div>
+            <div class="value" style="color: var(--red);">¥9,420.50</div>
+            <div class="trend down">▼ 较上月 -5.1%</div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
+          <div class="stat-card">
+            <div class="label">本月结余</div>
+            <div class="value" style="font-size: 18px; color: var(--green);">¥9,139.50</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">交易笔数</div>
+            <div class="value" style="font-size: 18px;">147 笔</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">待处理</div>
+            <div class="value" style="font-size: 18px; color: var(--amber);">3 笔</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h3>布局规格</h3>
+    <table class="spec-table">
+      <thead><tr><th>区域</th><th>规格</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>窗口尺寸</td><td><code>1180 × 780 (默认)</code></td><td>最小 900 × 620</td></tr>
+        <tr><td>侧边栏</td><td><code>225px 固定宽度</code></td><td>深色背景 #263029</td></tr>
+        <tr><td>主内容区</td><td><code>1fr 自适应</code></td><td>内边距 clamp(20px, 5vw, 52px)</td></tr>
+        <tr><td>卡片间距</td><td><code>14px - 18px</code></td><td>紧凑但不拥挤</td></tr>
+        <tr><td>圆角</td><td><code>卡片 16-18px / 按钮 8px / 徽章 999px</code></td><td>圆润风格</td></tr>
+        <tr><td>阴影</td><td><code>0 18px 42px rgba(48,42,31,.10)</code></td><td>柔和有深度</td></tr>
+      </tbody>
+    </table>
+
+    <h3>响应式适配</h3>
+    <p>当窗口宽度 ≤ 1050px 时，侧边栏变为顶部横向导航栏，三栏导入网格变为单栏堆叠，分析卡片变为两列。</p>
+    <p class="responsive-note">最小窗口 900px 时确保所有核心功能可用，表格区域横向滚动。</p>
+  </section>
+
+  <!-- 5. Components -->
+  <section>
+    <h2><span class="num">5</span>组件规范</h2>
+    <p class="desc">统一交互元素视觉风格，确保一致性</p>
+
+    <h3>按钮</h3>
+    <div class="component-row">
+      <button class="btn primary">确认导入</button>
+      <button class="btn">取消</button>
+      <button class="btn ghost">编辑</button>
+      <button class="btn danger">撤销</button>
+      <button class="btn primary sm">保存</button>
+    </div>
+    <table class="spec-table">
+      <thead><tr><th>类型</th><th>样式</th><th>使用场景</th></tr></thead>
+      <tbody>
+        <tr><td>主按钮 Primary</td><td>绿色背景 + 白字</td><td>页面核心操作（导入、保存）</td></tr>
+        <tr><td>次按钮 Default</td><td>白底 + 边框</td><td>辅助操作（取消、关闭）</td></tr>
+        <tr><td>幽灵按钮 Ghost</td><td>无边框 + 绿色文字</td><td>行内操作（编辑、查看）</td></tr>
+        <tr><td>危险按钮 Danger</td><td>红色背景 + 白字</td><td>破坏性操作（撤销、删除）</td></tr>
+      </tbody>
+    </table>
+
+    <h3>筛选标签 (Chip)</h3>
+    <div class="component-row">
+      <span class="chip active">全部</span>
+      <span class="chip">微信</span>
+      <span class="chip">支付宝</span>
+      <span style="width: 20px;"></span>
+      <span class="chip wechat">微信</span>
+      <span class="chip alipay">支付宝</span>
+    </div>
+    <p style="font-size: 13px; color: var(--muted); margin-top: 8px;">左侧为筛选状态（选中时绿色填充），右侧为来源标签（固定语义色）。</p>
+
+    <h3>状态徽章 (Badge)</h3>
+    <div class="component-row">
+      <span class="badge-pill settled">已完成</span>
+      <span class="badge-pill pending">待确认</span>
+      <span class="badge-pill unknown">待核实</span>
+      <span class="badge-pill" style="background: var(--green-soft); color: var(--green);">已入账</span>
+      <span class="badge-pill" style="background: #ece7db; color: var(--muted);">已关闭</span>
+      <span class="badge-pill" style="background: var(--red-soft); color: var(--red);">已反转</span>
+    </div>
+
+    <h3>统计卡片 (Stat Card)</h3>
+    <div class="component-row">
+      <div class="stat-card">
+        <div class="label">本月收入</div>
+        <div class="value" style="color: var(--green);">¥18,560.00</div>
+        <div class="trend up">▲ 较上月 +12.3%</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">本月支出</div>
+        <div class="value" style="color: var(--red);">¥9,420.50</div>
+        <div class="trend down">▼ 较上月 -5.1%</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">待处理</div>
+        <div class="value" style="color: var(--amber);">3 笔</div>
+        <div class="trend">需确认状态</div>
+      </div>
+    </div>
+    <p style="font-size: 13px; color: var(--muted);">统计卡片采用米色背景（非白色），与卡片表面形成层次。趋势指示用三角箭头 + 百分比，增长绿色下降红色。</p>
+
+    <h3>反馈提示</h3>
+    <div style="background: var(--green-soft); border-radius: var(--radius-sm); padding: 12px 16px; color: var(--green); font-size: 13px; margin-bottom: 8px;">
+      ✓ 导入成功：微信账单 156 条已入账
+    </div>
+    <div style="background: var(--red-soft); border-radius: var(--radius-sm); padding: 12px 16px; color: var(--red); font-size: 13px; margin-bottom: 8px;">
+      ✗ 导入失败：文件格式不支持，请选择微信 XLSX 或支付宝 CSV
+    </div>
+    <div style="background: var(--amber-soft); border-radius: var(--radius-sm); padding: 12px 16px; color: var(--amber); font-size: 13px;">
+      ⚠ 发现 3 条待核实记录，建议手动确认状态
+    </div>
+  </section>
+
+  <!-- 6. Page Specs -->
+  <section>
+    <h2><span class="num">6</span>页面详细设计</h2>
+    <p class="desc">四个核心页面的设计规格与交互说明</p>
+
+    <!-- Dashboard -->
+    <h3>6.1 仪表盘（新增 · 默认首页）</h3>
+    <p><strong>设计目标：</strong>用户打开应用第一眼即可掌握财务全貌，无需主动操作。</p>
+    <ul>
+      <li><strong>月度概览卡片区（顶部）：</strong>两张大卡片展示「本月收入」和「本月支出」，含环比趋势箭头；下方三张小卡片展示「结余」「交易笔数」「待处理」</li>
+      <li><strong>支出分类环形图（左下）：</strong>本月支出按分类占比的环形图，中心显示总额，下方图例标注各分类百分比</li>
+      <li><strong>消费日历热力图（右下）：</strong>按日历展示每日支出强度，颜色从浅到深表示消费金额，直观呈现消费节奏</li>
+      <li><strong>最近流水预览（底部）：</strong>展示最新 3-5 条流水摘要，点击「查看全部」跳转流水明细页</li>
+      <li><strong>月份选择器（右上角）：</strong>下拉切换查看月份，默认当前月</li>
+    </ul>
+    <div class="note green">
+      <strong>用户习惯对应：</strong>"这个月花了多少？""钱花在哪了？""哪天花得最多？" —— 仪表盘一次性回答这三个核心问题。
+    </div>
+
+    <!-- Import -->
+    <h3>6.2 导入中心（优化交互）</h3>
+    <p><strong>设计目标：</strong>让导入流程更顺滑，降低操作焦虑。</p>
+    <ul>
+      <li><strong>拖拽上传区（左列）：</strong>支持拖拽文件到上传区，也支持点击选择。显示支持的文件格式提示</li>
+      <li><strong>智能预览卡片（中列）：</strong>选择文件后自动识别平台，展示记录数、可入账数、错误行、时间范围和 SHA256 指纹</li>
+      <li><strong>替换选项：</strong>勾选「替换同指纹批次」可覆盖重复导入，默认关闭</li>
+      <li><strong>批次管理列表（右列）：</strong>展示所有导入批次，每个批次显示平台、时间、条数和 SHA256 前12位，支持撤销</li>
+      <li><strong>问题行展示：</strong>错误行和警告分行展示，错误用红色背景、警告用琥珀色背景</li>
+    </ul>
+    <div class="note">
+      <strong>交互优化：</strong>导入成功后自动跳转到流水明细页，让用户立即看到导入结果，形成操作闭环。
+    </div>
+
+    <!-- Events -->
+    <h3>6.3 流水明细（增强视觉层次）</h3>
+    <p><strong>设计目标：</strong>让大量流水的浏览、筛选和管理更高效。</p>
+    <ul>
+      <li><strong>标签式筛选器（替代下拉框）：</strong>平台筛选改为标签按钮组（全部 / 微信 / 支付宝），一键切换，当前选中绿色填充。分类和状态保留下拉框</li>
+      <li><strong>来源色彩标签：</strong>每行流水用小标签标注来源（微信=浅绿底绿字，支付宝=浅蓝底深蓝字），快速区分</li>
+      <li><strong>双行信息展示：</strong>对方/说明列采用双行布局，主标题加粗（对方名称），副标题灰色（描述 · 账户）</li>
+      <li><strong>金额右对齐 + 符号：</strong>支出红色加负号，收入绿色加正号，中性黑色无符号，等宽数字保证对齐</li>
+      <li><strong>浮动批量操作栏：</strong>选中任意行后，顶部出现蓝色批量操作栏，显示已选数量和操作按钮（改类型 / 改状态 / 批量保存 / 取消）</li>
+      <li><strong>行内编辑：</strong>点击编辑按钮，当前行变为编辑模式，下拉选择类型和状态，保存或取消</li>
+      <li><strong>分页控件：</strong>右下角分页，支持切换每页条数（20/50/100），显示当前页码和总页数</li>
+    </ul>
+
+    <!-- Analysis -->
+    <h3>6.4 收支分析（扩展可视化）</h3>
+    <p><strong>设计目标：</strong>从多维度呈现收支规律，辅助财务决策。</p>
+    <ul>
+      <li><strong>月度/年度切换：</strong>分段控件切换分析粒度</li>
+      <li><strong>累计统计卡片：</strong>四张卡片展示累计收入、累计实际支出、累计结余、周期数/笔数</li>
+      <li><strong>收支趋势折线图：</strong>双线图展示收入和支出趋势，带面积填充和悬停 tooltip，点击数据点可下钻查看该周期流水</li>
+      <li><strong>周期明细表：</strong>表格展示每个周期的收入、支出、净额和笔数，点击可跳转流水明细</li>
+      <li><strong>最新周期摘要：</strong>高亮展示最新周期的收入和支出数据</li>
+    </ul>
+    <div class="note">
+      <strong>新增建议：</strong>可增加「分类占比分析」模块，按消费类别展示支出分布柱状图，让用户了解"钱花在了哪里"。此功能依赖后端增加分类聚合 API。
+    </div>
+  </section>
+
+  <!-- 7. Interaction Patterns -->
+  <section>
+    <h2><span class="num">7</span>交互模式</h2>
+    <p class="desc">统一的交互反馈规范</p>
+
+    <table class="spec-table">
+      <thead><tr><th>场景</th><th>交互方式</th><th>反馈</th></tr></thead>
+      <tbody>
+        <tr><td>导入文件</td><td>点击选择 / 拖拽上传</td><td>解析中显示"解析中..."按钮禁用</td></tr>
+        <tr><td>确认导入</td><td>点击主按钮</td><td>成功后绿色提示 + 自动跳转流水页</td></tr>
+        <tr><td>撤销批次</td><td>点击撤销 → 弹窗确认</td><td>确认后删除记录，刷新列表</td></tr>
+        <tr><td>筛选流水</td><td>点击标签 / 选择下拉</td><td>即时刷新列表，无需手动查询</td></tr>
+        <tr><td>编辑流水</td><td>点击编辑 → 行内下拉</td><td>保存后绿色提示，取消则恢复</td></tr>
+        <tr><td>批量操作</td><td>勾选行 → 浮动操作栏</td><td>显示已选数量，操作后刷新</td></tr>
+        <tr><td>图表下钻</td><td>点击数据点 / 周期链接</td><td>跳转流水明细并自动设置筛选</td></tr>
+        <tr><td>切换月份</td><td>右上角下拉选择</td><td>仪表盘数据即时刷新</td></tr>
+      </tbody>
+    </table>
+
+    <h3>空状态设计</h3>
+    <p>所有列表/图表在无数据时展示友好的空状态提示，而非空白区域：</p>
+    <ul>
+      <li>仪表盘无数据：中央显示"请先导入账单，开始你的记账之旅" + 导入按钮</li>
+      <li>流水列表无数据：表格区域显示"暂无流水"或"正在加载..."</li>
+      <li>趋势图无数据：图表区域显示"暂无可展示的趋势数据"</li>
+      <li>分析表无数据：表格显示"暂无可分析的收支记录，请先导入账单"</li>
+    </ul>
+
+    <h3>加载状态</h3>
+    <ul>
+      <li>按钮操作：按钮文字变为"解析中..."/"保存中..."并禁用</li>
+      <li>表格加载：<code>aria-busy="true"</code> + 显示"正在加载流水..."</li>
+      <li>图表加载：显示"数据加载中..."占位</li>
+    </ul>
+  </section>
+
+  <!-- 8. Accessibility -->
+  <section>
+    <h2><span class="num">8</span>无障碍设计</h2>
+    <p class="desc">确保所有用户都能顺畅使用</p>
+
+    <ul>
+      <li><strong>语义化 HTML：</strong>使用 <code>&lt;nav&gt;</code>、<code>&lt;main&gt;</code>、<code>&lt;section&gt;</code>、<code>&lt;table&gt;</code> 等语义标签</li>
+      <li><strong>ARIA 标注：</strong>所有可交互元素添加 <code>aria-label</code>，图表添加 <code>role="group"</code> 和描述</li>
+      <li><strong>键盘导航：</strong>所有按钮和链接可通过 Tab 键访问，Enter/Space 触发操作</li>
+      <li><strong>焦点指示：</strong>聚焦时显示 2px 绿色 outline，偏移 3px</li>
+      <li><strong>对比度：</strong>所有文字与背景对比度 ≥ 4.5:1（WCAG AA 标准）</li>
+      <li><strong>表格滚动：</strong>宽表格横向滚动，表头固定，不丢失上下文</li>
+    </ul>
+  </section>
+
+  <!-- 9. Implementation Notes -->
+  <section>
+    <h2><span class="num">9</span>实施建议</h2>
+    <p class="desc">设计方案的技术落地路径</p>
+
+    <h3>分阶段实施</h3>
+    <table class="spec-table">
+      <thead><tr><th>阶段</th><th>内容</th><th>工作量评估</th></tr></thead>
+      <tbody>
+        <tr><td>Phase 1</td><td>新增仪表盘页面 + 月份选择器 + 概览卡片</td><td>需后端新增月度统计 API</td></tr>
+        <tr><td>Phase 2</td><td>流水页面筛选器改造（标签化）+ 来源色彩标签</td><td>纯前端改造</td></tr>
+        <tr><td>Phase 3</td><td>仪表盘支出分类环形图 + 消费日历热力图</td><td>需后端新增分类聚合 API</td></tr>
+        <tr><td>Phase 4</td><td>分析页面扩展（分类占比分析）</td><td>需后端新增分类统计 API</td></tr>
+        <tr><td>Phase 5</td><td>交互细节打磨（空状态、加载态、动画过渡）</td><td>纯前端优化</td></tr>
+      </tbody>
+    </table>
+
+    <h3>技术栈兼容</h3>
+    <ul>
+      <li>现有技术栈完全兼容：React 19 + TypeScript + Vite + 原生 CSS</li>
+      <li>无需引入 UI 框架，保持轻量。环形图和热力图可用 SVG 手绘（与现有趋势图一致）</li>
+      <li>Tauri CSP 策略已支持 <code>style-src 'self' 'unsafe-inline'</code>，内联样式可用</li>
+      <li>所有新增 API 通过 Tauri <code>invoke</code> 调用，与现有架构一致</li>
+    </ul>
+
+    <div class="note green">
+      <strong>优先级建议：</strong>先实施 Phase 1 + Phase 2（不依赖后端改动），快速让用户感受到新界面的变化。Phase 3-4 需要后端配合，可并行开发。
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

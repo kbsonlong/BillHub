@@ -82,11 +82,38 @@ fn api_events(
     provider: Option<String>,
     cash_flow: Option<String>,
     lifecycle: Option<String>,
+    period: Option<String>,
     state: State<AppState>,
 ) -> ApiResult<billhub_core::EventPage> {
     Ok(state
         .lock()?
-        .event_page(page, page_size, provider, cash_flow, lifecycle)?)
+        .event_page_filtered(page, page_size, provider, cash_flow, lifecycle, period)?)
+}
+
+#[tauri::command]
+fn api_update_event(
+    event_id: String,
+    event_kind: String,
+    lifecycle: String,
+    state: State<AppState>,
+) -> ApiResult<bool> {
+    Ok(state
+        .lock()?
+        .update_event_classification(&event_id, &event_kind, &lifecycle)?)
+}
+
+#[tauri::command]
+fn api_update_events(
+    event_ids: Vec<String>,
+    event_kind: Option<String>,
+    lifecycle: Option<String>,
+    state: State<AppState>,
+) -> ApiResult<usize> {
+    Ok(state.lock()?.update_events_classification(
+        &event_ids,
+        event_kind.as_deref(),
+        lifecycle.as_deref(),
+    )?)
 }
 
 #[tauri::command]
@@ -151,6 +178,8 @@ pub fn run() {
             api_import,
             api_batches,
             api_events,
+            api_update_event,
+            api_update_events,
             api_summary,
             api_monthly_summary,
             api_yearly_summary,

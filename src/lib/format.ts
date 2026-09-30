@@ -28,6 +28,9 @@ export const labels: Record<string, string> = {
   bank: "银行卡",
   payment: "支付",
   refund: "退款",
+  transfer: "转账",
+  top_up: "充值",
+  withdrawal: "提现",
   adjustment: "调整",
   expense: "支出",
   income: "收入",
@@ -36,5 +39,5 @@ export const labels: Record<string, string> = {
   settled: "已入账",
   closed: "已关闭",
   reversed: "已反转",
-  unknown: "未知",
+  unknown: "待核实",
 };

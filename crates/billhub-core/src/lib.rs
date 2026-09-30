@@ -6,7 +6,9 @@ pub mod normalize;
 pub mod parsers;
 pub mod service;
 
-pub use db::{BatchRecord, EventPage, LedgerEventRecord, LedgerStore, LedgerSummary, PeriodSummary};
+pub use db::{
+    BatchRecord, EventPage, LedgerEventRecord, LedgerStore, LedgerSummary, PeriodSummary,
+};
 pub use detect::{ImportFile, ParsedStatement, PreviewSummary, detect_import_file};
 pub use events::*;
 pub use normalize::{RawStatementRow, SourceRow};
@@ -30,6 +32,10 @@ pub enum Error {
     DateParseFailed { row: usize, value: String },
     #[error("DUPLICATE_FILE: 文件已导入为批次 {0}")]
     DuplicateFile(String),
+    #[error("INVALID_EVENT_CLASSIFICATION: 不支持的交易类型或状态")]
+    InvalidEventClassification,
+    #[error("NO_EVENT_CLASSIFICATION_CHANGE: 请至少选择要修改的类型或状态")]
+    NoEventClassificationChange,
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

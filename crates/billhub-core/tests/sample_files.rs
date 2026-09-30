@@ -71,7 +71,7 @@ fn imports_blocks_duplicates_and_deletes_batch_atomically() {
     let batch = billhub_core::import(&store, &file, ImportOptions::default()).unwrap();
     assert_eq!(batch.accepted_count, 514);
     assert!(billhub_core::import(&store, &file, ImportOptions::default()).is_err());
-    assert_eq!(store.summary(false, false).unwrap().pending_count, 0);
+    assert!(store.summary(false, false).unwrap().pending_count > 0);
     assert!(store.delete_batch(&batch.id).unwrap());
     assert!(store.batches().unwrap().is_empty());
     assert!(store.events(false, false, 10).unwrap().is_empty());
@@ -102,9 +102,12 @@ fn groups_imported_cash_flow_by_month_and_year() {
     assert!(!yearly.is_empty());
     assert_eq!(
         monthly_income,
-        summary.settled_income_cents + summary.refund_income_cents
+        summary.settled_income_cents - summary.refund_expense_cents
     );
-    assert_eq!(monthly_expense, summary.settled_expense_cents);
+    assert_eq!(
+        monthly_expense,
+        summary.settled_expense_cents - summary.refund_income_cents
+    );
     assert_eq!(yearly_income, monthly_income);
     assert_eq!(yearly_expense, monthly_expense);
     assert!(
@@ -125,6 +128,57 @@ fn period_summaries_use_china_time_and_net_refunds() {
     let store = LedgerStore::in_memory().unwrap();
     billhub_core::import(&store, &file, ImportOptions::default()).unwrap();
 
+    let first_page = store.event_page(1, 2, None, None, None).unwrap();
+    assert_eq!(first_page.total_count, 6);
+    assert_eq!(first_page.total_pages, 3);
+    assert_eq!(first_page.items.len(), 2);
+    assert_eq!(
+        store
+            .event_page(1, 20, None, Some("income".to_owned()), None)
+            .unwrap()
+            .total_count,
+        1
+    );
+    assert_eq!(
+        store
+            .event_page(1, 20, None, Some("refund".to_owned()), None)
+            .unwrap()
+            .total_count,
+        1
+    );
+    assert_eq!(
+        store
+            .event_page(1, 20, None, Some("expense".to_owned()), None)
+            .unwrap()
+            .total_count,
+        2
+    );
+    assert_eq!(
+        store
+            .event_page_filtered(1, 20, None, None, None, Some("2026-09".to_owned()))
+            .unwrap()
+            .total_count,
+        1
+    );
+    assert_eq!(
+        store
+            .event_page_filtered(1, 20, None, None, None, Some("2026-10".to_owned()))
+            .unwrap()
+            .total_count,
+        5
+    );
+    assert_eq!(
+        store
+            .event_page_filtered(1, 20, None, None, None, Some("2026".to_owned()))
+            .unwrap()
+            .total_count,
+        6
+    );
+    let pending = store
+        .event_page(1, 20, None, None, Some("pending".to_owned()))
+        .unwrap();
+    assert_eq!(pending.total_count, 1);
+
     let monthly = store.monthly_summary().unwrap();
     assert_eq!(monthly.len(), 2);
     assert_eq!(monthly[0].period, "2026-09");
@@ -133,17 +187,91 @@ fn period_summaries_use_china_time_and_net_refunds() {
     assert_eq!(monthly[0].net_cents, -10_000);
     assert_eq!(monthly[0].transaction_count, 1);
     assert_eq!(monthly[1].period, "2026-10");
-    assert_eq!(monthly[1].income_cents, 6_000);
-    assert_eq!(monthly[1].expense_cents, 2_000);
+    assert_eq!(monthly[1].income_cents, 5_000);
+    assert_eq!(monthly[1].expense_cents, 1_000);
     assert_eq!(monthly[1].net_cents, 4_000);
     assert_eq!(monthly[1].transaction_count, 3);
 
     let yearly = store.yearly_summary().unwrap();
     assert_eq!(yearly.len(), 1);
-    assert_eq!(yearly[0].income_cents, 6_000);
-    assert_eq!(yearly[0].expense_cents, 12_000);
+    assert_eq!(yearly[0].income_cents, 5_000);
+    assert_eq!(yearly[0].expense_cents, 11_000);
     assert_eq!(yearly[0].net_cents, -6_000);
     assert_eq!(yearly[0].transaction_count, 4);
+
+    let pending_event_id = pending.items[0].id.clone();
+    let summary = store.summary(true, true).unwrap();
+    assert_eq!(summary.pending_count, 1);
+    assert_eq!(summary.unknown_count, 0);
+
+    assert!(
+        store
+            .update_event_classification(&pending_event_id, "payment", "unknown")
+            .unwrap()
+    );
+    let summary = store.summary(true, true).unwrap();
+    assert_eq!(summary.pending_count, 0);
+    assert_eq!(summary.unknown_count, 1);
+    assert_eq!(
+        store
+            .event_page(1, 20, None, None, Some("unknown".to_owned()))
+            .unwrap()
+            .total_count,
+        1
+    );
+
+    assert!(
+        store
+            .update_event_classification(&pending_event_id, "payment", "settled")
+            .unwrap()
+    );
+    let confirmed = store
+        .event_page(1, 20, None, None, Some("settled".to_owned()))
+        .unwrap()
+        .items
+        .into_iter()
+        .find(|event| event.id == pending_event_id)
+        .unwrap();
+    assert_eq!(confirmed.event_kind, "payment");
+    assert_eq!(confirmed.cash_flow, "expense");
+    assert_eq!(confirmed.lifecycle, "settled");
+    let batch_ids = store
+        .event_page(1, 20, None, None, Some("settled".to_owned()))
+        .unwrap()
+        .items
+        .into_iter()
+        .take(2)
+        .map(|event| event.id)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        store
+            .update_events_classification(&batch_ids, Some("adjustment"), Some("closed"))
+            .unwrap(),
+        2
+    );
+    assert!(
+        store
+            .event_page(1, 20, None, None, Some("closed".to_owned()))
+            .unwrap()
+            .items
+            .iter()
+            .any(|event| batch_ids.contains(&event.id))
+    );
+    assert!(
+        !store
+            .update_event_classification("missing-event", "payment", "settled")
+            .unwrap()
+    );
+    assert!(
+        store
+            .update_events_classification(&batch_ids, None, None)
+            .is_err()
+    );
+    assert!(
+        store
+            .update_event_classification(&pending_event_id, "invalid", "settled")
+            .is_err()
+    );
 
     let refund = store
         .events(true, true, 10)

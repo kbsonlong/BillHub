@@ -58,6 +58,7 @@ export type EventFilters = {
   provider?: string;
   cashFlow?: string;
   lifecycle?: string;
+  period?: string;
 };
 
 export type LedgerSummary = {
@@ -66,6 +67,7 @@ export type LedgerSummary = {
   refund_income_cents: number;
   refund_expense_cents: number;
   pending_count: number;
+  unknown_count: number;
   neutral_count: number;
 };
 

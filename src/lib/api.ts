@@ -36,8 +36,14 @@ export const importStatement = (filePath: string, replace: boolean) =>
 
 export const loadBatches = () => invokeDesktop<BatchRecord[]>("api_batches");
 
-export const loadEvents = ({ page, pageSize, provider, cashFlow, lifecycle }: EventFilters) =>
-  invokeDesktop<EventPage>("api_events", { page, pageSize, provider, cashFlow, lifecycle });
+export const loadEvents = ({ page, pageSize, provider, cashFlow, lifecycle, period }: EventFilters) =>
+  invokeDesktop<EventPage>("api_events", { page, pageSize, provider, cashFlow, lifecycle, period });
+
+export const updateEvent = (eventId: string, eventKind: string, lifecycle: string) =>
+  invokeDesktop<boolean>("api_update_event", { eventId, eventKind, lifecycle });
+
+export const updateEvents = (eventIds: string[], eventKind?: string, lifecycle?: string) =>
+  invokeDesktop<number>("api_update_events", { eventIds, eventKind, lifecycle });
 
 export const loadSummary = (includeNeutral = false, includePending = false) =>
   invokeDesktop<LedgerSummary>("api_summary", { includeNeutral, includePending });
