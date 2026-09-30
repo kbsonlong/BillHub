@@ -4,6 +4,17 @@ import type { BatchRecord, EventFilters, EventPage, GamificationSnapshot, Import
 
 const DESKTOP_REQUIRED = "当前为浏览器预览模式，请使用 npm run dev 启动 BillHub 桌面端。";
 
+export function errorMessage(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const value = error as { message?: unknown; code?: unknown };
+    if (typeof value.message === "string" && value.message.trim()) return value.message;
+    if (typeof value.code === "string" && value.code.trim()) return value.code;
+  }
+  return "操作失败，请稍后重试。";
+}
+
 function ensureDesktop(): void {
   if (!isTauri()) throw new Error(DESKTOP_REQUIRED);
 }

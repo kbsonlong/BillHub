@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { BatchRecord, EventPage, GamificationSnapshot, ImportPreview, LedgerEvent, LedgerSummary, MonthDashboard, PeriodSummary } from "./types";
 import billhubLogo from "./assets/billhub-mark.svg";
 import {
-  completeDailyTask, createManualEntry, deleteBatch, importStatement, loadBatches, loadEvents, loadGamification, loadMonthDashboard, loadMonthlySummary, loadSummary, loadYearlySummary,
+  completeDailyTask, createManualEntry, deleteBatch, errorMessage, importStatement, loadBatches, loadEvents, loadGamification, loadMonthDashboard, loadMonthlySummary, loadSummary, loadYearlySummary,
   pickStatement, previewStatement, updateEvent, updateEvents,
 } from "./lib/api";
 import { dateTime, fileName, labels, money } from "./lib/format";
@@ -263,7 +263,7 @@ export default function App() {
       setMonthly(nextMonthly);
       setYearly(nextYearly);
     } catch (error) {
-      setFeedback({ kind: "error", text: String(error) });
+      setFeedback({ kind: "error", text: errorMessage(error) });
     }
   }, []);
 
@@ -284,7 +284,7 @@ export default function App() {
       setEventPage(nextEventPage);
     } catch (error) {
       if (requestId === eventRequestId.current) {
-        setFeedback({ kind: "error", text: String(error) });
+        setFeedback({ kind: "error", text: errorMessage(error) });
       }
     } finally {
       if (requestId === eventRequestId.current) setEventsLoading(false);
@@ -295,7 +295,7 @@ export default function App() {
   const refreshGamification = useCallback(async () => {
     setGamificationLoading(true);
     try { setGamification(await loadGamification(taskDay)); }
-    catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    catch (error) { setFeedback({ kind: "error", text: errorMessage(error) }); }
     finally { setGamificationLoading(false); }
   }, [taskDay]);
   useEffect(() => { void refreshGamification(); }, [refreshGamification, dataVersion]);
@@ -310,7 +310,7 @@ export default function App() {
     setDashboardLoading(true);
     void loadMonthDashboard(selectedMonth)
       .then((nextDashboard) => { if (active) setDashboard(nextDashboard); })
-      .catch((error) => { if (active) setFeedback({ kind: "error", text: String(error) }); })
+      .catch((error) => { if (active) setFeedback({ kind: "error", text: errorMessage(error) }); })
       .finally(() => { if (active) setDashboardLoading(false); });
     return () => { active = false; };
   }, [tab, selectedMonth, dataVersion]);
@@ -325,7 +325,7 @@ export default function App() {
     setFilePath(path);
     setPreview(null);
     try { setPreview(await previewStatement(path)); }
-    catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    catch (error) { setFeedback({ kind: "error", text: errorMessage(error) }); }
     finally { setBusy(false); }
   }, []);
 
@@ -355,18 +355,23 @@ export default function App() {
       if (!selected) return;
       await prepareStatement(selected);
     }
-    catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    catch (error) { setFeedback({ kind: "error", text: errorMessage(error) }); }
   };
 
   const importFile = async () => {
     if (!filePath) return;
     setBusy(true); setFeedback(null);
     try {
-      const batch = await importStatement(filePath, replace, taskDay);
+      const awardDay = taskDay;
+      const batch = await importStatement(filePath, replace, awardDay);
+      if (batch.accepted_count > 0) {
+        try { setGamification(await loadGamification(awardDay)); }
+        catch { /* The dataVersion refresh below retries without masking a successful import. */ }
+      }
       setFeedback({ kind: "success", text: `导入成功：${labels[batch.provider] ?? batch.provider} ${batch.accepted_count} 条` });
       setDataVersion((version) => version + 1);
       setPreview(null); setFilePath(""); await refresh(); setTab("events");
-    } catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    } catch (error) { setFeedback({ kind: "error", text: errorMessage(error) }); }
     finally { setBusy(false); }
   };
 
@@ -389,21 +394,21 @@ export default function App() {
       setDataVersion((version) => version + 1);
       await refresh();
       if (tab === "events") await refreshEventPage();
-    } catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    } catch (error) { setFeedback({ kind: "error", text: errorMessage(error) }); }
     finally { setBusy(false); }
   };
 
   const finishTask = async (taskId: string) => {
     setBusy(true); setFeedback(null);
     try { setGamification(await completeDailyTask(taskId, taskDay)); setFeedback({ kind: "success", text: "每日任务已完成，XP 已更新。" }); }
-    catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    catch (error) { setFeedback({ kind: "error", text: errorMessage(error) }); }
     finally { setBusy(false); }
   };
 
   const removeBatch = async (batch: BatchRecord) => {
     if (!window.confirm(`撤销批次将删除 ${batch.accepted_count} 条已入账记录，是否继续？`)) return;
     try { await deleteBatch(batch.id); setDataVersion((version) => version + 1); await refresh(); await refreshEventPage(); }
-    catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    catch (error) { setFeedback({ kind: "error", text: errorMessage(error) }); }
   };
 
   const saveEvent = async () => {
@@ -417,7 +422,7 @@ export default function App() {
       setFeedback({ kind: "success", text: "流水类型和状态已更新。" });
       await refresh();
       await refreshEventPage();
-    } catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    } catch (error) { setFeedback({ kind: "error", text: errorMessage(error) }); }
     finally { setBusy(false); }
   };
 
@@ -451,7 +456,7 @@ export default function App() {
       setFeedback({ kind: "success", text: `已批量更新 ${updated} 条流水。` });
       await refresh();
       await refreshEventPage();
-    } catch (error) { setFeedback({ kind: "error", text: String(error) }); }
+    } catch (error) { setFeedback({ kind: "error", text: errorMessage(error) }); }
     finally { setBusy(false); }
   };
 
@@ -538,7 +543,7 @@ export default function App() {
           <div className="dashboard-card section-heading"><div><h2>今日任务</h2><p>完成状态由账本数据实时计算。</p></div><label>日期<input type="date" value={taskDay} onChange={(event) => setTaskDay(event.target.value)} /></label></div>
           {gamification?.tasks.map((task) => <article className={`task-card${task.completed ? " completed" : ""}`} key={task.id}>
             <div><h3>{task.title}</h3><p>{task.description}</p></div><span className="task-xp">+{task.xp} XP</span>
-            {task.id === "review_transactions" && !task.completed ? <button disabled={busy} onClick={() => { setTab("events"); setProviderFilter("all"); setPage(1); }}>前往流水复核</button> : <button className={task.completed ? "" : "primary"} disabled={busy || task.completed} onClick={() => void finishTask(task.id)}>{task.completed ? "已完成" : "标记完成"}</button>}
+            {task.completed ? <button disabled>已完成</button> : task.id === "record_entry" ? <button className="primary" onClick={() => setTab("manual")}>记一笔</button> : task.id === "import_statement" ? <button className="primary" onClick={() => setTab("import")}>前往导入</button> : <button disabled={busy} onClick={() => { setTab("events"); setProviderFilter("all"); setPage(1); }}>前往流水复核</button>}
           </article>)}
           {!gamification?.tasks.length && <div className="dashboard-empty">{gamificationLoading ? "正在加载任务…" : "暂无每日任务数据。"}</div>}
         </section>}

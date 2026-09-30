@@ -2,6 +2,7 @@ use crate::detect::{ImportFile, ParsedStatement};
 use crate::{Error, ImportOptions, Result, normalize::RawStatementRow};
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, params};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use uuid::Uuid;
 
@@ -174,6 +175,9 @@ impl LedgerStore {
             CREATE TABLE IF NOT EXISTS gamification_awards (
               day TEXT NOT NULL, task_id TEXT NOT NULL, xp INTEGER NOT NULL,
               PRIMARY KEY(day, task_id)
+            );
+            CREATE TABLE IF NOT EXISTS gamification_import_batches (
+              batch_id TEXT PRIMARY KEY REFERENCES import_batches(id) ON DELETE CASCADE
             );
             UPDATE ledger_events
                SET occurred_at = occurred_at - 28800,
@@ -368,7 +372,7 @@ impl LedgerStore {
                     params![format!("{}-{}", issue_id_prefix, row_number), batch_id, *row_number as i64, "error", "PARSE_FAILED", message],
                 )?;
             }
-            if !parsed.rows.is_empty() { if let Some(day) = task_day { self.award_task(day, "import_statement", 20)?; } }
+            if !parsed.rows.is_empty() { if let Some(day) = task_day { self.award_task(day, "import_statement", 20)?; self.connection.execute("INSERT OR IGNORE INTO gamification_import_batches(batch_id) VALUES(?1)", params![batch_id])?; } }
             Ok(BatchRecord {
                 id: batch_id,
                 provider: parsed.provider.as_str().to_owned(),
@@ -417,14 +421,36 @@ impl LedgerStore {
 
     pub fn gamification(&self, day: &str) -> Result<GamificationSnapshot> {
         if !valid_day(day) { return Err(Error::InvalidManualEntry); }
-        let total_xp = self.connection.query_row("SELECT COALESCE(SUM(xp),0) FROM gamification_awards", [], |r| r.get(0))?;
+        let mut xp_by_day = BTreeMap::<String, i64>::new();
+        let mut awarded_import_days = BTreeSet::new();
+        {
+            let mut statement = self.connection.prepare("SELECT day,task_id,SUM(xp) FROM gamification_awards GROUP BY day,task_id")?;
+            let rows = statement.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?)))?;
+            for row in rows {
+                let (award_day, task_id, xp) = row?;
+                *xp_by_day.entry(award_day.clone()).or_default() += xp;
+                if task_id == "import_statement" { awarded_import_days.insert(award_day); }
+            }
+        }
+        // Older successful imports predate gamification_awards. Derive one import reward per
+        // local import date, while batches imported by this version use their selected taskDay.
+        let mut legacy_import_days = BTreeSet::new();
+        {
+            let mut statement = self.connection.prepare("SELECT strftime('%Y-%m-%d', b.imported_at, 'unixepoch', 'localtime') FROM import_batches b LEFT JOIN gamification_import_batches g ON g.batch_id=b.id WHERE b.accepted_count>0 AND g.batch_id IS NULL")?;
+            let rows = statement.query_map([], |row| row.get::<_, Option<String>>(0))?;
+            for row in rows { if let Some(import_day) = row? { legacy_import_days.insert(import_day); } }
+        }
+        for import_day in &legacy_import_days {
+            if !awarded_import_days.contains(import_day) { *xp_by_day.entry(import_day.clone()).or_default() += 20; }
+        }
+        let total_xp: i64 = xp_by_day.values().sum();
         let today = chrono::NaiveDate::parse_from_str(day,"%Y-%m-%d").unwrap();
         let mut streak = 0;
-        for offset in 0..3660 { let d = today - chrono::Duration::days(offset); let exists: bool = self.connection.query_row("SELECT EXISTS(SELECT 1 FROM gamification_awards WHERE day=?1)", params![d.to_string()], |r| r.get(0))?; if exists { streak+=1 } else if offset > 0 { break } }
+        for offset in 0..3660 { let d = today - chrono::Duration::days(offset); if xp_by_day.get(&d.to_string()).copied().unwrap_or_default() > 0 { streak+=1 } else if offset > 0 { break } }
         let mut week=Vec::new();
-        for offset in (0..7).rev() { let d=today-chrono::Duration::days(offset); let xp=self.connection.query_row("SELECT COALESCE(SUM(xp),0) FROM gamification_awards WHERE day=?1",params![d.to_string()],|r|r.get(0))?; week.push(GamificationDay{date:d.to_string(),xp,completed:xp>0}); }
+        for offset in (0..7).rev() { let d=today-chrono::Duration::days(offset); let xp=xp_by_day.get(&d.to_string()).copied().unwrap_or_default(); week.push(GamificationDay{date:d.to_string(),xp,completed:xp>0}); }
         let defs=[("record_entry","记一笔","成功记录一笔","30"),("import_statement","导入账单","成功导入账单","20"),("review_transactions","每日回顾","完成今日流水回顾","15")];
-        let mut tasks=Vec::new(); for (id,title,description,xp) in defs { let done:bool=self.connection.query_row("SELECT EXISTS(SELECT 1 FROM gamification_awards WHERE day=?1 AND task_id=?2)",params![day,id],|r|r.get(0))?; tasks.push(GamificationTask{id:id.into(),title:title.into(),description:description.into(),xp:xp.parse().unwrap(),completed:done}); }
+        let mut tasks=Vec::new(); for (id,title,description,xp) in defs { let done:bool=(id=="import_statement" && legacy_import_days.contains(day)) || self.connection.query_row("SELECT EXISTS(SELECT 1 FROM gamification_awards WHERE day=?1 AND task_id=?2)",params![day,id],|r|r.get(0))?; tasks.push(GamificationTask{id:id.into(),title:title.into(),description:description.into(),xp:xp.parse().unwrap(),completed:done}); }
         let level=total_xp/100+1; let xp_into_level=total_xp%100;
         Ok(GamificationSnapshot{total_xp,level,xp_into_level,next_level_xp:100,streak_days:streak,week,tasks})
     }
