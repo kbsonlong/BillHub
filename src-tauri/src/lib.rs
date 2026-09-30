@@ -56,18 +56,36 @@ fn api_preview(
 fn api_import(
     file_path: String,
     replace: bool,
+    task_day: String,
     state: State<AppState>,
 ) -> ApiResult<billhub_core::BatchRecord> {
     let file = ImportFile::from_path(&file_path)?;
-    let result = billhub_core::import(
-        &*state.lock()?,
+    let store = state.lock()?;
+    let parsed = billhub_core::detect_import_file(&file)?.parse(&file)?;
+    let result = store.import_with_task(
         &file,
+        parsed,
         ImportOptions {
             replace,
             source_path: Some(file.file_name.clone()),
         },
+        Some(&task_day),
     )?;
     Ok(result)
+}
+
+#[tauri::command]
+fn api_create_manual_entry(occurred_at:i64, amount_cents:i64, cash_flow:String, category:String, description:String, task_day:String, state:State<AppState>) -> ApiResult<billhub_core::LedgerEventRecord> {
+    Ok(state.lock()?.create_manual_entry(occurred_at, amount_cents, &cash_flow, &category, &description, &task_day)?)
+}
+
+#[tauri::command]
+fn api_gamification(day:String, state:State<AppState>) -> ApiResult<billhub_core::GamificationSnapshot> { Ok(state.lock()?.gamification(&day)?) }
+
+#[tauri::command]
+fn api_complete_daily_task(task_id:String, day:String, state:State<AppState>) -> ApiResult<billhub_core::GamificationSnapshot> {
+    if task_id != "review_transactions" { return Err(ApiError::new("只允许完成每日回顾任务")); }
+    Ok(state.lock()?.complete_review_task(&day)?)
 }
 
 #[tauri::command]
@@ -184,6 +202,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             api_preview,
             api_import,
+            api_create_manual_entry,
+            api_gamification,
+            api_complete_daily_task,
             api_batches,
             api_events,
             api_update_event,

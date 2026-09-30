@@ -7,7 +7,7 @@ pub mod parsers;
 pub mod service;
 
 pub use db::{
-    BatchRecord, CategoryTotal, DailyExpense, EventPage, LedgerEventRecord, LedgerStore,
+    BatchRecord, CategoryTotal, DailyExpense, EventPage, GamificationDay, GamificationSnapshot, GamificationTask, LedgerEventRecord, LedgerStore,
     LedgerSummary, MonthDashboard, PeriodSummary,
 };
 pub use detect::{ImportFile, ParsedStatement, PreviewSummary, detect_import_file};
@@ -37,6 +37,8 @@ pub enum Error {
     InvalidEventClassification,
     #[error("NO_EVENT_CLASSIFICATION_CHANGE: 请至少选择要修改的类型或状态")]
     NoEventClassificationChange,
+    #[error("INVALID_MANUAL_ENTRY: 手工记账参数无效")]
+    InvalidManualEntry,
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

@@ -68,7 +68,7 @@ pub struct MonthDashboard {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct LedgerEventRecord {
     pub id: String,
-    pub batch_id: String,
+    pub batch_id: Option<String>,
     pub provider: String,
     pub occurred_at: i64,
     pub event_kind: String,
@@ -83,6 +83,13 @@ pub struct LedgerEventRecord {
     pub merchant_order_id: Option<String>,
     pub raw_json: String,
 }
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct GamificationTask { pub id: String, pub title: String, pub description: String, pub xp: i64, pub completed: bool }
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct GamificationDay { pub date: String, pub xp: i64, pub completed: bool }
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct GamificationSnapshot { pub total_xp: i64, pub level: i64, pub xp_into_level: i64, pub next_level_xp: i64, pub streak_days: i64, pub week: Vec<GamificationDay>, pub tasks: Vec<GamificationTask> }
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct EventPage {
@@ -164,6 +171,10 @@ impl LedgerStore {
               code TEXT NOT NULL,
               message TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS gamification_awards (
+              day TEXT NOT NULL, task_id TEXT NOT NULL, xp INTEGER NOT NULL,
+              PRIMARY KEY(day, task_id)
+            );
             UPDATE ledger_events
                SET occurred_at = occurred_at - 28800,
                    settled_at = CASE WHEN settled_at IS NULL THEN NULL ELSE settled_at - 28800 END
@@ -181,6 +192,31 @@ impl LedgerStore {
             let _ = connection.execute_batch("ROLLBACK");
         }
         result?;
+        let batch_required: bool = connection.query_row(
+            "SELECT \"notnull\" FROM pragma_table_info('ledger_events') WHERE name='batch_id'",
+            [], |row| row.get::<_, i64>(0).map(|value| value != 0),
+        )?;
+        if batch_required {
+            connection.execute_batch(r"
+                PRAGMA foreign_keys=OFF;
+                BEGIN IMMEDIATE;
+                CREATE TABLE ledger_events_new (
+                  id TEXT PRIMARY KEY, batch_id TEXT REFERENCES import_batches(id) ON DELETE CASCADE,
+                  provider TEXT NOT NULL, occurred_at INTEGER NOT NULL, settled_at INTEGER,
+                  event_kind TEXT NOT NULL, cash_flow TEXT NOT NULL, lifecycle TEXT NOT NULL,
+                  amount_cents INTEGER NOT NULL CHECK(amount_cents > 0), currency TEXT NOT NULL DEFAULT 'CNY',
+                  counterparty TEXT, description TEXT, category_id TEXT, funding_account_id TEXT, raw_category TEXT,
+                  provider_transaction_id TEXT NOT NULL, merchant_order_id TEXT, source_row_hash TEXT NOT NULL,
+                  raw_json TEXT NOT NULL, UNIQUE(provider, provider_transaction_id));
+                INSERT INTO ledger_events_new SELECT * FROM ledger_events;
+                DROP TABLE ledger_events;
+                ALTER TABLE ledger_events_new RENAME TO ledger_events;
+                CREATE INDEX idx_ledger_occurred_at ON ledger_events(occurred_at);
+                CREATE INDEX idx_ledger_filters ON ledger_events(cash_flow, event_kind, lifecycle, provider);
+                COMMIT;
+                PRAGMA foreign_keys=ON;
+            ")?;
+        }
         Self::migrate_cash_flow_classification(connection)?;
         Ok(())
     }
@@ -272,6 +308,17 @@ impl LedgerStore {
         parsed: ParsedStatement,
         options: ImportOptions,
     ) -> Result<BatchRecord> {
+        self.import_with_task(file, parsed, options, None)
+    }
+
+    pub fn import_with_task(
+        &self,
+        file: &ImportFile,
+        parsed: ParsedStatement,
+        options: ImportOptions,
+        task_day: Option<&str>,
+    ) -> Result<BatchRecord> {
+        if task_day.is_some_and(|day| !valid_day(day)) { return Err(Error::InvalidManualEntry); }
         let sha256 = file.sha256();
         if !options.replace && self.file_status(&sha256)?.is_some() {
             return Err(Error::DuplicateFile(sha256));
@@ -321,6 +368,7 @@ impl LedgerStore {
                     params![format!("{}-{}", issue_id_prefix, row_number), batch_id, *row_number as i64, "error", "PARSE_FAILED", message],
                 )?;
             }
+            if !parsed.rows.is_empty() { if let Some(day) = task_day { self.award_task(day, "import_statement", 20)?; } }
             Ok(BatchRecord {
                 id: batch_id,
                 provider: parsed.provider.as_str().to_owned(),
@@ -341,6 +389,44 @@ impl LedgerStore {
                 Err(error)
             }
         }
+    }
+
+    pub fn create_manual_entry(&self, occurred_at: i64, amount_cents: i64, cash_flow: &str, category: &str, description: &str, task_day: &str) -> Result<LedgerEventRecord> {
+        if amount_cents <= 0 || amount_cents > i64::MAX / 2 || !matches!(cash_flow, "expense" | "income") || category.trim().is_empty() || category.chars().count() > 100 || description.chars().count() > 500 || !valid_day(task_day) || chrono::DateTime::from_timestamp(occurred_at, 0).is_none() { return Err(Error::InvalidManualEntry); }
+        let id = Uuid::new_v4().to_string();
+        let provider_transaction_id = id.clone();
+        self.connection.execute_batch("BEGIN IMMEDIATE")?;
+        let result = (|| -> Result<LedgerEventRecord> {
+            self.connection.execute("INSERT INTO ledger_events(id,batch_id,provider,occurred_at,settled_at,event_kind,cash_flow,lifecycle,amount_cents,raw_category,provider_transaction_id,source_row_hash,raw_json,description) VALUES(?1,NULL,'manual',?2,?2,'payment',?3,'settled',?4,?5,?6,?7,'{}',?8)", params![id, occurred_at, cash_flow, amount_cents, category, provider_transaction_id, id, description])?;
+            self.award_task(task_day, "record_entry", 30)?;
+            self.connection.query_row("SELECT id,batch_id,provider,occurred_at,event_kind,cash_flow,lifecycle,amount_cents,counterparty,description,raw_category,funding_account_id,provider_transaction_id,merchant_order_id,raw_json FROM ledger_events WHERE id=?1", params![id], map_event).map_err(Into::into)
+        })();
+        match result { Ok(value) => { self.connection.execute_batch("COMMIT")?; Ok(value) }, Err(error) => { let _ = self.connection.execute_batch("ROLLBACK"); Err(error) } }
+    }
+
+    fn award_task(&self, day: &str, task: &str, xp: i64) -> Result<()> {
+        if !valid_day(day) { return Err(Error::InvalidManualEntry); }
+        self.connection.execute("INSERT OR IGNORE INTO gamification_awards(day,task_id,xp) VALUES(?1,?2,?3)", params![day,task,xp])?; Ok(())
+    }
+
+    pub fn complete_review_task(&self, day: &str) -> Result<GamificationSnapshot> {
+        if !valid_day(day) { return Err(Error::InvalidManualEntry); }
+        self.connection.execute("INSERT OR IGNORE INTO gamification_awards(day,task_id,xp) VALUES(?1,'review_transactions',15)", params![day])?;
+        self.gamification(day)
+    }
+
+    pub fn gamification(&self, day: &str) -> Result<GamificationSnapshot> {
+        if !valid_day(day) { return Err(Error::InvalidManualEntry); }
+        let total_xp = self.connection.query_row("SELECT COALESCE(SUM(xp),0) FROM gamification_awards", [], |r| r.get(0))?;
+        let today = chrono::NaiveDate::parse_from_str(day,"%Y-%m-%d").unwrap();
+        let mut streak = 0;
+        for offset in 0..3660 { let d = today - chrono::Duration::days(offset); let exists: bool = self.connection.query_row("SELECT EXISTS(SELECT 1 FROM gamification_awards WHERE day=?1)", params![d.to_string()], |r| r.get(0))?; if exists { streak+=1 } else if offset > 0 { break } }
+        let mut week=Vec::new();
+        for offset in (0..7).rev() { let d=today-chrono::Duration::days(offset); let xp=self.connection.query_row("SELECT COALESCE(SUM(xp),0) FROM gamification_awards WHERE day=?1",params![d.to_string()],|r|r.get(0))?; week.push(GamificationDay{date:d.to_string(),xp,completed:xp>0}); }
+        let defs=[("record_entry","记一笔","成功记录一笔","30"),("import_statement","导入账单","成功导入账单","20"),("review_transactions","每日回顾","完成今日流水回顾","15")];
+        let mut tasks=Vec::new(); for (id,title,description,xp) in defs { let done:bool=self.connection.query_row("SELECT EXISTS(SELECT 1 FROM gamification_awards WHERE day=?1 AND task_id=?2)",params![day,id],|r|r.get(0))?; tasks.push(GamificationTask{id:id.into(),title:title.into(),description:description.into(),xp:xp.parse().unwrap(),completed:done}); }
+        let level=total_xp/100+1; let xp_into_level=total_xp%100;
+        Ok(GamificationSnapshot{total_xp,level,xp_into_level,next_level_xp:100,streak_days:streak,week,tasks})
     }
 
     fn insert_event(
@@ -447,7 +533,7 @@ impl LedgerStore {
     ) -> Result<EventPage> {
         let page = page.max(1);
         let page_size = page_size.clamp(1, 100);
-        let provider = provider.filter(|value| matches!(value.as_str(), "wechat" | "alipay"));
+        let provider = provider.filter(|value| matches!(value.as_str(), "wechat" | "alipay" | "manual"));
         let cash_flow = cash_flow.filter(|value| {
             matches!(
                 value.as_str(),
@@ -782,6 +868,11 @@ fn is_event_kind(value: &str) -> bool {
         value,
         "payment" | "refund" | "transfer" | "top_up" | "withdrawal" | "adjustment"
     )
+}
+
+fn valid_day(value: &str) -> bool {
+    chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok()
+        && value.len() == 10
 }
 
 fn is_lifecycle(value: &str) -> bool {
