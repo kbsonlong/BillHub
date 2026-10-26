@@ -388,6 +388,7 @@ export default function App() {
       const [year, month, day] = manualDate.split("-").map(Number);
       const occurredAt = Math.floor(new Date(year, month - 1, day, 12).getTime() / 1000);
       await createManualEntry({ occurredAt, amountCents, cashFlow: manualFlow, category: manualCategory.trim(), description: manualDescription.trim(), taskDay: manualDate });
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       setManualAmount(""); setManualCategory(""); setManualDescription("");
       setFeedback({ kind: "success", text: "记账成功，流水与成长数据已更新。" });
       setTaskDay(manualDate);
